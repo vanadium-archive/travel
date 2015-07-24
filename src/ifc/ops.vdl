@@ -1,0 +1,50 @@
+package ifc
+
+const (
+  Read = "R"
+  Write = "W"
+  Collaborate = "C"
+)
+
+// Stub multicast RPCs to mock SyncBase storage.
+// TODO: allow multiple trips (e.g. multiple planned trips).
+type TravelSync interface {
+  // Gets the current trip.
+  Get() (Trip | error) { Read }
+
+  // Pushes a trip plan to the server instance, optionally with a notification
+  // message (ex. "X has accepted Y's destination proposal.").
+  // To simplify the API, this is the sole API through which the trip plan may
+  // actually be altered.
+  UpdatePlan(plan TripPlan, message string) error { Write }
+
+  // Pushes the current trip status to the server instance, leaving the trip
+  // plan unchanged.
+  UpdateStatus(status TravellerStatus) error { Write }
+
+  // Posts a suggestion to add a destination to the trip plan.
+  SuggestDestinationAddition(
+    destination Destination, at TripStatus, message string) (
+    SuggestionId | error) { Collaborate }
+
+  // Posts a suggestion to add a waypoint to the trip plan.
+  SuggestWaypointAddition(
+    waypoint Waypoint, at TripStatus, message string) (
+    SuggestionId | error) { Collaborate }
+
+  // Posts a suggestion to remove a waypoint or destination from the trip plan.
+  SuggestRemoval(at TripStatus, message string) (
+    SuggestionId | error) { Collaborate }
+
+  // Comments on an existing suggestion.
+  Comment(suggestion SuggestionId, message string) error { Collaborate }
+
+  // Deletes an existing suggestion.
+  DeleteSuggestion(
+    suggestion SuggestionId, message string) error { Collaborate }
+}
+
+type Travel interface {
+  TravelSync
+  // TODO: casting if warranted
+}

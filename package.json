@@ -1,0 +1,19 @@
+{
+  "name": "travel",
+  "version": "0.1.0",
+  "decription": "Distributed travel planner Vanadium sample application.",
+  "scripts": {
+    "test": "make test"
+  },
+  "devDependencies": {
+    "browserify": "^10.2.4",
+    "jsdom": "^3.1.2",
+    "node-static": "^0.7.6",
+    "tape": "^4.0.0"
+  },
+  "dependencies": {
+    "global": "^4.3.0",
+    "jquery": "^2.1.4",
+    "uuid": "^2.0.1"
+  }
+}
