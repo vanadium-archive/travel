@@ -7,7 +7,7 @@ var TravelSync = defineClass({
   init: function() {
     this.tripPlan = [];
     this.tripStatus = {};
-    
+
     // TODO: sync initial state
     this.server = new vdlTravel.TravelSync();
 

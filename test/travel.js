@@ -11,9 +11,11 @@ function cleanDom() {
 }
 
 test('init', function(t) {
+  /* jshint -W031 */ //instantiation smoke test
   new Travel({
     maps: mockMaps
   });
+  /* jshint +W031 */
   t.end();
   cleanDom();
 });
@@ -23,18 +25,18 @@ test('message display', function(t) {
     vanadiumWrapper: mockVanadiumWrapper,
     maps: mockMaps
   });
-  
+
   var $messages = $('.messages');
   t.ok($messages.length, 'message display exists');
   t.equals($messages.children().length, 0, 'message display is empty');
-  
+
   travel.info('Test message.');
-  
+
   var $messageItem = $messages.children();
   t.equals($messageItem.length, 1, 'message display shows 1 message');
   t.equals($messageItem.text(), 'Test message.',
     'message displays message text');
-    
+
   t.end();
   cleanDom();
 });
@@ -43,15 +45,17 @@ test('domRoot', function(t) {
   var $root = $('<div>');
   var root = $root[0];
   $('body').append($root);
-  
+
+  /* jshint -W031 */ //top-level application
   new Travel({
     maps: mockMaps,
     vanadiumWrapper: mockVanadiumWrapper,
     domRoot: root
   });
-  
+  /* jshint +W031 */
+
   t.ok($root.children().length, 'app parented to given root');
-  
+
   t.end();
   cleanDom();
 });

@@ -1,5 +1,14 @@
-module.exports = function() {
+function getStrings(locale) {
   return {
-    'Search': 'Search'
+    'Destination': 'Destination',
+    destination: function(n) {
+      return 'Destination ' + n;
+    },
+    'Origin': 'Origin',
+    'Travel Planner': 'Travel Planner'
   };
-};
+}
+
+getStrings.currentLocale = getStrings();
+
+module.exports = getStrings;

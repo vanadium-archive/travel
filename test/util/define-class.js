@@ -30,11 +30,11 @@ test('defineClass', function(t) {
     constants: ['greeting'],
     events: ['stringQueried', {stringQueriedOnce: 'once'}]
   });
-  
+
   var testInstance = new TestClass('world');
-  
+
   t.ok(testInstance, 'instance instantiated');
-  
+
   var queried = 0, queriedOnce = 0;
   testInstance.stringQueried.add(function(value) {
     t.equal(value, 'world', 'event argument');
@@ -44,26 +44,26 @@ test('defineClass', function(t) {
     t.equal(value, 'world', 'event argument');
     queriedOnce++;
   });
-  
+
   t.notOk(testInstance.stringQueried.fired(), 'event not fired');
-  
+
   t.equal(testInstance.greeting, 'Hello', 'public constant accessible');
   t.equal(testInstance.toString(), 'Hello, world!', 'public member accessible');
-  
+
   t.assert(testInstance.stringQueried.fired(), 'event fired');
-  
+
   t.equal(queried, 1, 'event fired');
   t.equal(queriedOnce, 1, 'once event fired');
-  
+
   testInstance.toString();
   t.equal(queried, 2, 'event fired again');
   t.equal(queriedOnce, 1, 'once event not fired again');
-  
+
   t.notOk(testInstance.getMessage, 'private member not accessible');
   t.notOk(testInstance.value, 'instance field not accessible');
   t.notOk(testInstance.stringQueried.fire, 'event fire not accessible');
   t.notOk(testInstance.stringQueried.fireWith, 'event fireWith not accessible');
-  
+
   t.end();
 });
 
@@ -71,7 +71,7 @@ test('events object', function(t) {
   var TestClass = defineClass({
     init: function() {
       this.privateFires = this.publicFires = 0;
-      
+
       var self = this;
       this.privateEvent.add(function() {
         self.privateFires++;
@@ -80,16 +80,16 @@ test('events object', function(t) {
         self.publicFires++;
       });
     },
-    
+
     publics: {
       getPrivateFires: function() {
         return this.privateFires;
       },
-      
+
       getPublicFires: function() {
         return this.publicFires;
       },
-      
+
       trigger: function() {
         this.triggerOnce.fire();
         this.privateEvent();
@@ -102,27 +102,27 @@ test('events object', function(t) {
       publicEvent: 'public'
     }
   });
-  
+
   var testInstance = new TestClass();
   var count = 0;
   testInstance.triggerOnce.add(function() {
     count++;
   });
-  
+
   testInstance.trigger();
   t.equal(count, 1, 'event fired');
   testInstance.trigger();
   t.equal(count, 1, 'event not fired again');
-  
+
   t.notOk(testInstance.privateEvent, 'private event not accessible');
   t.equal(testInstance.getPrivateFires(), 2, 'private event fired twice');
   t.equal(testInstance.getPublicFires(), 2, 'public event fired twice');
-  
+
   t.notOk($.isFunction(testInstance.triggerOnce), 'normal event not callable');
   t.ok($.isFunction(testInstance.publicEvent), 'public event callable');
   testInstance.publicEvent();
   t.equal(testInstance.getPublicFires(), 3, 'public event fired thrice');
-  
+
   t.end();
 });
 
@@ -133,18 +133,56 @@ test('statics', function(t) {
         return this.CONSTANT;
       }
     },
-    
+
     statics: {
       CONSTANT: 42
     }
   });
-  
+
   t.equal(TestClass.CONSTANT, 42, 'public static access');
-  
+
   var testInstance = new TestClass();
-  
+
   t.equal(testInstance.CONSTANT, 42, 'public access');
   t.equal(testInstance.getValue(), 42, 'private access');
-  
+
+  t.end();
+});
+
+test('inner class', function(t) {
+  var Outer = defineClass({
+    init: function(prefix) {
+      this.prefix = prefix;
+    },
+
+    publics: {
+      inner: defineClass.innerClass({
+        init: function(suffix) {
+          this.suffix = suffix;
+        },
+
+        publics: {
+          getString: function() {
+            return this.outer.prefix + this.suffix;
+          }
+        }
+      })
+    }
+  });
+
+  var outer1 = new Outer('Hello, ');
+  var inner1x1 = outer1.inner('world!'),
+      inner1x2 = outer1.inner('Cleveland!');
+
+  var outer2 = new Outer('Goodnight, ');
+  var inner2 = outer2.inner('moon.');
+
+  t.equal(inner1x1.getString(), 'Hello, world!',
+    'fields of outer and inner classes not corrupted by other instances');
+  t.equal(inner1x2.getString(), 'Hello, Cleveland!',
+    'multiple instances of an inner class');
+  t.equal(inner2.getString(), 'Goodnight, moon.',
+    'multiple instances of an outer class');
+
   t.end();
 });

@@ -34,11 +34,13 @@ var $ = require('./jquery');
  * time. (As such, using that mechanism to declare private static constants does
  * work.)
  */
-module.exports = function defineClass(def) {
+module.exports = defineClass;
+
+function defineClass(def) {
   var constructor = function() {
     var pthis = $.extend({}, def.privates, def.publics, def.statics);
     var ifc = this;
-    
+
     if (def.events) {
       if ($.isArray(def.events)) {
         $.each(def.events, function(i, event) {
@@ -52,27 +54,44 @@ module.exports = function defineClass(def) {
         defineEventsFromObject(pthis, ifc, def.events);
       }
     }
-    
-    if (def.statics)
+
+    if (def.statics) {
       $.extend(ifc, def.statics);
-    
-    if (def.init)
+    }
+
+    if (def.init) {
       def.init.apply(pthis, arguments);
-    
-    if (def.publics)
+    }
+
+    if (def.publics) {
       polyProxy(ifc, pthis, def.publics);
-    
+    }
+
     if (def.constants) {
       $.each(def.constants, function(i, constant) {
         ifc[constant] = pthis[constant];
       });
     }
   };
-  
-  if (def.statics)
+
+  if (def.statics) {
     $.extend(constructor, def.statics);
-  
+  }
+
   return constructor;
+}
+
+defineClass.innerClass = function(def) {
+  var init = def.init;
+  def.init = function(outer, constructorArgs) {
+    this.outer = outer;
+    init.apply(this, constructorArgs);
+  };
+
+  var InnerClass = defineClass(def);
+  return function() {
+    return new InnerClass(this, arguments);
+  };
 };
 
 function polyProxy(proxy, context, members) {
@@ -84,8 +103,9 @@ function polyProxy(proxy, context, members) {
 
 function filterProxy(proxy, context, nameFilter) {
   $.each(context, function(name, member) {
-    if (nameFilter(name))
+    if (nameFilter(name)) {
       proxy[name] = $.proxy(member, context);
+    }
   });
   return proxy;
 }
@@ -95,15 +115,16 @@ function defineEvent(pthis, ifc, name, flags) {
   //Use polyProxy on function that fires to add the callable syntactic sugar
   var callableDispatcher = pthis[name] =
     polyProxy($.proxy(dispatcher, 'fire'), dispatcher, dispatcher);
-    
-  if (flags && flags.indexOf('private') > -1)
+
+  if (flags && flags.indexOf('private') > -1) {
     return;
-  
+  }
+
   if (flags && flags.indexOf('public') > -1) {
     ifc[name] = callableDispatcher;
   } else {
     ifc[name] = filterProxy({}, dispatcher, function(name) {
-      return name != 'fire' && name != 'fireWith';
+      return name !== 'fire' && name !== 'fireWith';
     });
   }
 }

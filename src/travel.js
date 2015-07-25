@@ -9,36 +9,36 @@ var Maps = require('./components/maps');
 var TravelSync = require('./travelsync');
 var Identity = require('./identity');
 
-var strings = require('./strings')(/* TODO: locale */);
-
 var Travel = defineClass({
   publics: {
     error: function (err) {
       this.maps.message(message.error(err.toString()));
     },
-    
+
     info: function (info) {
       this.maps.message(message.info(info));
     }
   },
-  
+
   init: function (opts) {
     opts = opts || {};
     var vanadiumWrapper = opts.vanadiumWrapper || vanadiumWrapperDefault;
     var travel = this;
-    
+
     this.sync = new TravelSync();
-    
-    var reportError = $.proxy(this, 'error')
-    
+
+    var reportError = $.proxy(this, 'error');
+
     vanadiumWrapper.init(opts.vanadium).then(
       function(wrapper) {
+        wrapper.onCrash.add(reportError);
+
         var identity = new Identity(wrapper.getAccountName());
         identity.mountName = makeMountName(identity);
-        travel.sync.start(identity.mountName, wrapper).fail(reportError);
+        travel.sync.start(identity.mountName, wrapper).catch(reportError);
       }, reportError);
-    
-    this.maps = new Maps(opts.maps);    
+
+    this.maps = new Maps(opts.maps);
     var $domRoot = opts.domRoot? $(opts.domRoot) : $('body');
     $domRoot.append(travel.maps.$);
   }

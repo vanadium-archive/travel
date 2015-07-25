@@ -42,8 +42,12 @@ $(server_static): server-root/%: src/static/% | server-root
 	@cp $< $@
 	@echo "Copying static file $<"
 
+.PHONY: lint
+lint: node_modules
+	@jshint .
+
 .PHONY: test
-test: $(tests)
+test: lint $(tests)
 
 .PHONY: $(tests)
 $(tests): test/%: test/%.js test/* mocks/* ifc node_modules $(js_files)

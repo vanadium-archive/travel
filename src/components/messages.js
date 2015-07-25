@@ -29,9 +29,9 @@ var Messages = defineClass({
         });
     }
   },
-  
+
   constants: ['$'],
-  
+
   init: function() {
     this.$ = $('<ul>').addClass('messages');
   }

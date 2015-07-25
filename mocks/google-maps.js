@@ -1,5 +1,5 @@
-var $ = require('../src/util/jquery')
-var defineClass = require('../src/util/define-class')
+var $ = require('../src/util/jquery');
+var defineClass = require('../src/util/define-class');
 
 var ControlPosition = {
   TOP_LEFT: 'tl',
@@ -11,7 +11,7 @@ var ControlPanel = defineClass({
     this.$ = $('<div>');
     this.$.appendTo(parent);
   },
-  
+
   publics: {
     push: function(child) {
       this.$.append(child);
@@ -27,11 +27,11 @@ module.exports = {
   },
   LatLng: function(){},
   ControlPosition: ControlPosition,
-  
+
   places: {
     SearchBox: function(){}
   },
-  
+
   event: {
     addListener: function(){}
   }

@@ -6,75 +6,62 @@ var defineClass = require('./util/define-class');
 var VanadiumWrapper = defineClass({
   init: function(runtime) {
     this.runtime = runtime;
-    runtime.on('crash', this.crash);
+    runtime.on('crash', this.onCrash);
   },
-  
+
   publics: {
     getAccountName: function() {
       return this.runtime.accountName;
     },
-    
+
     /**
      * @param endpoint Vanadium name
      * @returns a promise resolving to a client or rejecting with an error.
      */
     client: function(endpoint) {
       var client = this.runtime.newClient();
-      var async = $.Deferred();
-      client.bindTo(this.runtime.getContext(), endpoint, function(err, client) {
-        if (err)
-          async.reject(err);
-        else
-          async.resolve(client);
-      });
-      
-      return async.promise();
+      return client.bindTo(this.runtime.getContext(), endpoint);
     },
-    
+
     /**
      * @param endpoint Vanadium name
      * @param server object implementing server APIs
      * @returns a promise resolving to void or rejecting with an error.
      */
-    server: function(endpoint, server, callback) {
-      var async = $.Deferred();
-      this.runtime.newServer().serve(endpoint, server, function(err) {
-        if (err)
-          async.reject(err);
-        else
-          async.resolve();
-      });
-      return async.promise();
+    server: function(endpoint, server) {
+      return this.runtime.newServer().serve(endpoint, server);
     }
   },
-  
+
   events: {
-    crash: 'memory'
+    onCrash: 'memory'
   }
 });
 
 module.exports = {
   /**
    * @param vanadium optional vanadium override
-   * @returns a promise resolving to a VanadiumWrapper or rejecting with an error.
+   * @returns a promise resolving to a VanadiumWrapper or rejecting with an
+   *  error.
    */
   init: function(vanadium) {
     vanadium = vanadium || vanadiumDefault;
 
     var config = {
       logLevel: vanadium.vlog.levels.INFO,
-      appName: 'Google Travel'
+      appName: 'Travel Planner'
     };
-    
+
     var async = $.Deferred();
-    
+
     vanadium.init(config, function(err, runtime) {
-      if (err)
+      if (err) {
         async.reject(err);
-      else
+      } else {
         async.resolve(new VanadiumWrapper(runtime));
+      }
     });
-    
+
     return async.promise();
   }
 };

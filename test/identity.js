@@ -1,5 +1,3 @@
-'use strict';
-
 var test = require('tape');
 
 var Identity = require('../src/identity');
@@ -45,7 +43,7 @@ test('init', function(t) {
   t.equals(i.username, 'joeuser@google.com',
     'should extract a username from a dev.v.io account name');
   var expectedPrefix = 'joeuser@google.com/desktop_';
-  t.assert(i.entityName.slice(0, expectedPrefix.length) == expectedPrefix,
+  t.assert(i.entityName.slice(0, expectedPrefix.length) === expectedPrefix,
     'entityName starts with expected prefix');
   t.assert(i.entityName.length > expectedPrefix.length,
     'entityName is longer than expected prefix');
