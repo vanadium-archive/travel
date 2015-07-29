@@ -19,6 +19,22 @@ body {
   padding: 8px 16px;
 }
 
+.destination input {
+  display: initial;
+}
+
+.destination input.autocomplete {
+  display: none;
+}
+
+.destination.autocomplete input {
+  display: none;
+}
+
+.destination.autocomplete input.autocomplete {
+  display: initial;
+}
+
 .destination-info .title {
   font-weight: 500;
   font-size: 14px;

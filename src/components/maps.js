@@ -26,13 +26,16 @@ var Widget = defineClass({
       }
     },
 
-    deselectDestinationControl: function() {
+    deselectDestinationControl: function(closeInfoWindow) {
       if (this.selectedDestinationControl) {
         this.selectedDestinationControl.deselectControl();
         this.selectedDestinationControl = null;
         this.disableLocationSelection();
         this.clearSearchMarkers();
-        this.closeActiveInfoWindow();
+
+        if (closeInfoWindow !== false) {
+          this.closeActiveInfoWindow();
+        }
       }
     },
 
@@ -78,11 +81,15 @@ var Widget = defineClass({
     },
 
     createDestinationMarker: function(normalizedPlace, destinationControl) {
+      var widget = this;
+
       var marker = this.createMarker(normalizedPlace, destinationControl,
         this.getAppropriateDestinationMarkerColor(destinationControl));
       destinationControl.marker = marker;
-      marker.onClick.add(
-        $.proxy(this, 'selectDestinationControl', destinationControl));
+
+      marker.onClick.add(function() {
+        widget.selectDestinationControl(destinationControl, false);
+      });
 
       return marker;
     },
@@ -108,6 +115,8 @@ var Widget = defineClass({
         return;
       }
 
+      var widget = this;
+
       if (destination.marker) {
         destination.marker.removeClient(destination);
       }
@@ -117,8 +126,9 @@ var Widget = defineClass({
       if (marker) {
         marker.pushClient(destination,
           this.getAppropriateDestinationMarkerColor(destination));
-        marker.onClick.add(
-          $.proxy(this, 'selectDestinationControl', destination));
+        marker.onClick.add(function() {
+          widget.selectDestinationControl(destination, false);
+        });
       }
     },
 
@@ -170,6 +180,7 @@ var Widget = defineClass({
     },
 
     bindDestinationControl: function (destination) {
+      var widget = this;
       var maps = this.maps;
       var map = this.map;
 
@@ -177,8 +188,9 @@ var Widget = defineClass({
         destination.setSearchBounds(map.getBounds());
       });
 
-      destination.onFocus.add(
-        $.proxy(this, 'selectDestinationControl', destination));
+      destination.onFocus.add(function() {
+        widget.selectDestinationControl(destination);
+      });
       destination.onSearch.add($.proxy(this, 'showDestinationSearchResults'));
       destination.onSet.add($.proxy(this, 'handleDestinationSet', destination));
     },
@@ -193,13 +205,13 @@ var Widget = defineClass({
       this.locationSelectionEnabled = false;
     },
 
-    selectDestinationControl: function(dest) {
+    selectDestinationControl: function(dest, closeInfoWindow) {
       if (dest !== this.selectedDestinationControl) {
         var prevDest = this.selectedDestinationControl;
         if (prevDest && prevDest.marker) {
           prevDest.marker.setColor(DestinationMarker.color.BLUE);
         }
-        this.deselectDestinationControl();
+        this.deselectDestinationControl(closeInfoWindow);
 
         this.selectedDestinationControl = dest;
         dest.selectControl();

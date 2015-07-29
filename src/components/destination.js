@@ -62,12 +62,44 @@ var Destination = defineClass({
     set: function(placeDesc, updateSearchBox) {
       var normalized = this.normalizeDestination(placeDesc);
 
+      this.setAutocomplete(!normalized);
+
       if (normalized && updateSearchBox !== false) {
         this.$searchBox.prop('value', normalized.display);
       }
 
       this.place = normalized && normalized.place;
       this.onSet(normalized);
+    }
+  },
+
+  privates: {
+    /**
+     * This is a bit of a hack; Maps API does not include functionality to
+     * disable autocomplete.
+     */
+    setAutocomplete: function(autocomplete) {
+      if (this.autocomplete !== autocomplete) {
+        this.autocomplete = autocomplete;
+
+        var oldBox = this.$searchBox[autocomplete? 1 : 0],
+            newBox = this.$searchBox[autocomplete? 0 : 1];
+
+        newBox.value = oldBox.value;
+        var active = global.document &&
+          global.document.activeElement === oldBox;
+        newBox.setSelectionRange(oldBox.selectionStart, oldBox.selectionEnd);
+
+        if (autocomplete) {
+          this.$.addClass('autocomplete');
+        } else {
+          this.$.removeClass('autocomplete');
+        }
+
+        if (active) {
+          $(newBox).focus();
+        }
+      }
     }
   },
 
@@ -92,9 +124,13 @@ var Destination = defineClass({
   init: function(maps, placeholder, initial) {
     var destination = this;
 
-    var $searchBox = $('<input>')
-      .attr('type', 'text');
+    var $searchBox = $.merge($('<input>'), $('<input>'))
+      .attr('type', 'text')
+      //to make dummy box consistent with search
+      .attr('autocomplete', 'off');
     this.$searchBox = $searchBox;
+
+    $searchBox[0].className = 'autocomplete';
 
     this.setPlaceholder(placeholder);
 
@@ -107,18 +143,18 @@ var Destination = defineClass({
       destination.set(null, false);
     });
 
-    this.$ = $('<div>').addClass('destination')
+    this.$ = $('<div>')
+      .addClass('destination')
+      .addClass('autocomplete')
       .append($searchBox);
 
     this.searchBox = new maps.places.SearchBox($searchBox[0]);
 
+    this.autocomplete = true;
+
     maps.event.addListener(this.searchBox, 'places_changed', function() {
       destination.onSearch(destination.searchBox.getPlaces());
     });
-
-    /* TODO(rosswang): can we for the love of squirrels stop the autocomplete
-     * from popping up after a location has been selected through a map click?
-     */
   }
 });
 
