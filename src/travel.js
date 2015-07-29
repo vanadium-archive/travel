@@ -38,7 +38,7 @@ var Travel = defineClass({
         travel.sync.start(identity.mountName, wrapper).catch(reportError);
       }, reportError);
 
-    this.maps = new Maps(opts.maps);
+    this.maps = new Maps(opts);
     var $domRoot = opts.domRoot? $(opts.domRoot) : $('body');
     $domRoot.append(travel.maps.$);
   }

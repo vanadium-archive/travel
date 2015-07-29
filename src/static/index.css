@@ -10,12 +10,18 @@ body {
 
 .destination {
   width: 100%;
+  position: relative;
 }
 
 .destination input {
   width: 100%;
   font-size: 15px;
   padding: 8px 16px;
+}
+
+.destination-info .title {
+  font-weight: 500;
+  font-size: 14px;
 }
 
 .map-canvas {
@@ -51,4 +57,9 @@ ul.messages {
 .messages li.error:before {
   content: "x ";
   color: red;
+}
+
+.selected {
+  box-shadow: 0 0 8px #05f;
+  z-index: 1;
 }

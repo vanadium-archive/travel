@@ -8,7 +8,9 @@ var message = require ('../../src/components/message');
 var mockMaps = require('../../mocks/google-maps');
 
 test('message display', function(t) {
-  var maps = new Maps(mockMaps);
+  var maps = new Maps({
+    maps: mockMaps
+  });
 
   var $messages = $('.messages', maps.$);
   t.ok($messages.length, 'message display exists');
@@ -23,5 +25,3 @@ test('message display', function(t) {
 
   t.end();
 });
-
-module.exports = mockMaps;

@@ -38,6 +38,10 @@ var Destinations = defineClass({
       $.each(this.destinations, function(i, destination) {
         handler(destination);
       });
+    },
+
+    getDestinations: function() {
+      return this.destinations.slice(0);
     }
   },
 

@@ -36,12 +36,14 @@ test('defineClass', function(t) {
   t.ok(testInstance, 'instance instantiated');
 
   var queried = 0, queriedOnce = 0;
-  testInstance.stringQueried.add(function(value) {
+  t.notOk(testInstance.stringQueried.add(function(value) {
     t.equal(value, 'world', 'event argument');
     queried++;
-  });
+  }).fire, 'callback accessibility leak');
+  t.ok(testInstance.stringQueried.has(), 'callback proxied accessor');
   testInstance.stringQueriedOnce.add(function(value) {
     t.equal(value, 'world', 'event argument');
+    t.equal(this, testInstance, 'event context');
     queriedOnce++;
   });
 
@@ -183,6 +185,89 @@ test('inner class', function(t) {
     'multiple instances of an inner class');
   t.equal(inner2.getString(), 'Goodnight, moon.',
     'multiple instances of an outer class');
+
+  t.end();
+});
+
+test('late binding of public members', function(t) {
+  var TestClass = defineClass({
+    publics: {
+      getValue: function() {
+        return 'a';
+      },
+      rebind: function() {
+        this.getValue = function() {
+          return 'b';
+        };
+      }
+    }
+  });
+  var testInstance = new TestClass();
+  testInstance.rebind();
+  t.equal(testInstance.getValue(), 'b',
+    'public interface should late-bind to private');
+  t.end();
+});
+
+test('late binding of event members', function(t) {
+  var fireCount = 0;
+
+  function listener() {
+    fireCount++;
+  }
+
+  var TestClass = defineClass({
+    publics: {
+      addA: function() {
+        this.onA.add(listener);
+      },
+
+      a: function() {
+        this.onA();
+      },
+
+      b: function() {
+        this.onB();
+      },
+
+      getListenerCount: function() {
+        return this.listenerCount;
+      }
+    },
+
+    events: {
+      onA: 'private',
+      onB: '',
+      onC: 'public'
+    },
+
+    init: function() {
+      var self = this;
+      this.listenerCount = 0;
+
+      function decorateEvent(event) {
+        defineClass.decorate(event, 'add', function() {
+          self.listenerCount++;
+        });
+      }
+
+      decorateEvent(this.onA);
+      decorateEvent(this.onB);
+      decorateEvent(this.onC);
+    }
+  });
+
+  var testInstance = new TestClass();
+  testInstance.addA();
+  t.equal(testInstance.getListenerCount(), 1, 'events decorated');
+  testInstance.onB.add(listener);
+  t.equal(testInstance.getListenerCount(), 2, 'events decorated');
+  testInstance.onC.add(listener);
+  t.equal(testInstance.getListenerCount(), 3, 'events decorated');
+  testInstance.a();
+  testInstance.b();
+  testInstance.onC();
+  t.equal(fireCount, 3, 'events still work');
 
   t.end();
 });

@@ -38,8 +38,12 @@ module.exports = defineClass;
 
 function defineClass(def) {
   var constructor = function() {
-    var pthis = $.extend({}, def.privates, def.publics, def.statics);
     var ifc = this;
+    var pthis = $.extend({
+        ifc: ifc //expose reflexive public interface for private use
+      },
+      //extend in inverse precedence
+      def.statics, def.publics, def.privates);
 
     if (def.events) {
       if ($.isArray(def.events)) {
@@ -64,7 +68,7 @@ function defineClass(def) {
     }
 
     if (def.publics) {
-      polyProxy(ifc, pthis, def.publics);
+      polyProxy(ifc, pthis, def.publics, true);
     }
 
     if (def.constants) {
@@ -94,18 +98,52 @@ defineClass.innerClass = function(def) {
   };
 };
 
-function polyProxy(proxy, context, members) {
-  $.each(members, function(name, member) {
-    proxy[name] = $.proxy(member, context);
-  });
+/**
+ * Decorates a member function with a like-signatured function to be called
+ * prior to the main invocation.
+ */
+defineClass.decorate = function(context, name, before)  {
+  var proto = context[name];
+  context[name] = function() {
+    before.apply(context, arguments);
+    return proto.apply(context, arguments);
+  };
+};
+
+/**
+ * Late-bind proxies to maximize flexibility at negligible performance cost.
+ * However, a word of caution: although normal jQuery proxies are identifiable
+ * as equivalent to their originals for the purposes of callback binding, these
+ * will not be.
+ */
+function lateProxy(context, name) {
+  return function() {
+    return context[name].apply(context, arguments);
+  };
+}
+
+function polyProxy(proxy, context, members, lateBinding) {
+  $.each(members, $.isArray(members)?
+    function() {
+      proxy[this] =
+        lateBinding? lateProxy(context, this) : $.proxy(context, this);
+    } :
+    function(name, member) {
+      proxy[name] =
+        lateBinding? lateProxy(context, name) : $.proxy(member, context);
+    });
   return proxy;
 }
 
-function filterProxy(proxy, context, nameFilter) {
-  $.each(context, function(name, member) {
-    if (nameFilter(name)) {
-      proxy[name] = $.proxy(member, context);
-    }
+/**
+ * Replaces "this" returns with proxy.
+ */
+function polyReflexiveLateProxy(proxy, context, members) {
+  $.each(members, function(i, name) {
+    proxy[name] = function() {
+      context[name].apply(context, arguments);
+      return proxy;
+    };
   });
   return proxy;
 }
@@ -113,8 +151,9 @@ function filterProxy(proxy, context, nameFilter) {
 function defineEvent(pthis, ifc, name, flags) {
   var dispatcher = $.Callbacks(flags);
   //Use polyProxy on function that fires to add the callable syntactic sugar
-  var callableDispatcher = pthis[name] =
-    polyProxy($.proxy(dispatcher, 'fire'), dispatcher, dispatcher);
+  var callableDispatcher = pthis[name] = polyProxy(function() {
+    dispatcher.fireWith.call(dispatcher, ifc, arguments);
+  }, dispatcher, dispatcher, false);
 
   if (flags && flags.indexOf('private') > -1) {
     return;
@@ -123,9 +162,16 @@ function defineEvent(pthis, ifc, name, flags) {
   if (flags && flags.indexOf('public') > -1) {
     ifc[name] = callableDispatcher;
   } else {
-    ifc[name] = filterProxy({}, dispatcher, function(name) {
-      return name !== 'fire' && name !== 'fireWith';
-    });
+    var publicEvent = {};
+    /* We'll want the context to actually be callableDispatcher even though
+     * the interface and functionality of dispatcher suffice so that we can
+     * late-bind to the instance exposed to private this. */
+    polyProxy(publicEvent, callableDispatcher,
+      ['disabled', 'fired', 'has', 'locked'], true);
+    polyReflexiveLateProxy(publicEvent, callableDispatcher,
+      ['add', 'disable', 'empty', 'lock', 'remove']);
+
+    ifc[name] = publicEvent;
   }
 }
 
