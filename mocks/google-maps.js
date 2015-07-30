@@ -2,6 +2,7 @@ var $ = require('../src/util/jquery');
 var defineClass = require('../src/util/define-class');
 
 var ControlPosition = {
+  LEFT_TOP: 'lt',
   TOP_LEFT: 'tl',
   TOP_CENTER: 'tc'
 };
@@ -65,6 +66,7 @@ var Map = defineClass({
 
   init: function(canvas) {
     this.controls = {};
+    this.controls[ControlPosition.LEFT_TOP] = new ControlPanel(canvas);
     this.controls[ControlPosition.TOP_CENTER] = new ControlPanel(canvas);
     this.controls[ControlPosition.TOP_LEFT] = new ControlPanel(canvas);
 
@@ -119,6 +121,8 @@ var SearchBox = defineClass({
 
 module.exports = {
   ControlPosition: ControlPosition,
+  DirectionsService: function(){},
+  DirectionsStatus: {},
   Geocoder: function(){},
   InfoWindow: InfoWindow,
   LatLng: function(){},

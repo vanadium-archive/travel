@@ -23,9 +23,17 @@ var Destinations = defineClass({
           placeholder = strings.destination(this.destinations.length);
       }
 
-      var destination = this.addDestination(placeholder, destinationName);
-      this.$.append(destination.$);
+      var destination = new Destination(
+        this.maps, placeholder, destinationName);
+      this.$destContainer.append(destination.$);
       this.destinations.push(destination);
+      var prev = this.destinations[this.destinations.length - 2];
+      if (prev) {
+        prev.bindNext(destination);
+      }
+      this.onDestinationAdded(destination);
+
+      return destination;
     },
 
     /**
@@ -45,15 +53,6 @@ var Destinations = defineClass({
     }
   },
 
-  privates: {
-    addDestination: function(placeholder, destinationName) {
-      var destination = new Destination(this.maps, placeholder,
-        destinationName);
-      this.onDestinationAdded(destination);
-      return destination;
-    }
-  },
-
   events: {
     /**
      * @param destination Destination instance
@@ -64,8 +63,20 @@ var Destinations = defineClass({
   constants: ['$'],
 
   init: function(maps, initial) {
+    var self = this;
+
     this.maps = maps;
     this.$ = $('<form>').addClass('destinations');
+    this.$destContainer = $('<div>');
+    this.$.append(this.$destContainer);
+
+    $('<div>')
+      .addClass('add-bn')
+      .text('+')
+      .click(function() {
+        self.append().focus();
+      })
+      .appendTo(this.$);
 
     this.destinations = [];
 

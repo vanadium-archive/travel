@@ -44,7 +44,7 @@ var Widget = defineClass({
         .map(function(dest) { return dest.getPlace(); })
         .filter(function(place) { return place; })
         .reduce(function(acc, place) {
-          acc.push(place.location);
+          acc.push(place.place.location);
           return acc;
         }, []);
 
@@ -147,6 +147,62 @@ var Widget = defineClass({
       if (normalizedPlace) {
         this.disableLocationSelection();
       }
+
+      if (destination.getPrevious()) {
+        this.updateLeg(destination);
+      }
+
+      if (destination.getNext()) {
+        this.updateLeg(destination.getNext());
+      }
+    },
+
+    updateLeg: function(destinationControl) {
+      var widget = this;
+      var maps = this.maps;
+      var map = this.map;
+
+      var origin = destinationControl.getPrevious().getPlace();
+      var destination = destinationControl.getPlace();
+
+      var leg = destinationControl.leg;
+      if (leg) {
+        if (leg.async) {
+          leg.async.reject();
+        }
+        // setMap(null) seems to be the best way to clear the nav route
+        leg.renderer.setMap(null);
+      } else {
+        var renderer = new maps.DirectionsRenderer({
+          preserveViewport: true,
+          suppressMarkers: true
+        });
+        destinationControl.leg = leg = { renderer: renderer };
+      }
+
+      if (origin && destination) {
+        var request = {
+          origin: origin.place.location,
+          destination: destination.place.location,
+          travelMode: maps.TravelMode.DRIVING // TODO(rosswang): user choice
+        };
+
+        leg.async = $.Deferred();
+
+        this.directionsService.route(request, function(result, status) {
+          if (status === maps.DirectionsStatus.OK) {
+            leg.async.resolve(result);
+          } else {
+            widget.onError({ directionsStatus: status });
+            leg.async.reject(status);
+          }
+        });
+
+        leg.async.done(function(route) {
+          leg.renderer.setDirections(route);
+          leg.renderer.setMap(map);
+        });
+      }
     },
 
     centerOnCurrentLocation: function() {
@@ -191,8 +247,10 @@ var Widget = defineClass({
       destination.onFocus.add(function() {
         widget.selectDestinationControl(destination);
       });
-      destination.onSearch.add($.proxy(this, 'showDestinationSearchResults'));
-      destination.onSet.add($.proxy(this, 'handleDestinationSet', destination));
+      destination.onSearch.add(
+        $.proxy(this, 'showDestinationSearchResults', destination));
+      destination.onSet.add(
+        $.proxy(this, 'handleDestinationSet', destination));
     },
 
     enableLocationSelection: function() {
@@ -229,8 +287,16 @@ var Widget = defineClass({
       }
     },
 
-    showDestinationSearchResults: function(places) {
+    showDestinationSearchResults: function(destination, places) {
       var widget = this;
+
+      if (destination !== this.selectedDestinationControl) {
+        /* There seems to be a bug where if you click a search suggestion (for
+         * a query, not a resolved location) in autocomplete, the input box
+         * under it gets clicked and focused... I haven't been able to figure
+         * out why. */
+         destination.focus();
+      }
 
       this.clearSearchMarkers();
       this.closeActiveInfoWindow();
@@ -255,7 +321,7 @@ var Widget = defineClass({
 
           marker.onClick.add(function() {
             var dest = widget.selectedDestinationControl;
-            if (dest) {
+            if (dest && dest.marker !== marker) {
               widget.associateDestinationMarker(dest, marker);
               dest.set(place);
             }
@@ -286,6 +352,13 @@ var Widget = defineClass({
   },
 
   constants: ['$', 'maps'],
+  events: {
+    /**
+     * @param error A union with one of the following keys:
+     *  directionsStatus
+     */
+    onError: 'memory'
+  },
 
   // https://developers.google.com/maps/documentation/javascript/tutorial
   init: function(opts) {
@@ -296,11 +369,11 @@ var Widget = defineClass({
     this.maps = maps;
     this.navigator = opts.navigator || global.navigator;
     this.geocoder = new maps.Geocoder();
+    this.directionsService = new maps.DirectionsService();
 
     this.$ = $('<div>').addClass('map-canvas');
 
     this.searchMarkers = [];
-    this.route = {};
 
     this.initialConfig = {
       center: new maps.LatLng(37.4184, -122.0880), //Googleplex
@@ -323,7 +396,7 @@ var Widget = defineClass({
     this.centerOnCurrentLocation();
 
     var controls = map.controls;
-    controls[maps.ControlPosition.TOP_LEFT].push(this.destinations.$[0]);
+    controls[maps.ControlPosition.LEFT_TOP].push(this.destinations.$[0]);
     controls[maps.ControlPosition.TOP_CENTER].push(this.messages.$[0]);
   }
 });

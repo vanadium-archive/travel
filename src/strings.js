@@ -4,8 +4,17 @@ function getStrings(locale) {
     destination: function(n) {
       return 'Destination ' + n;
     },
+    DirectionsStatus: {
+      NOT_FOUND: 'Location not found',
+      ZERO_RESULTS: 'No route to destination',
+      MAX_WAYPOINTS_EXCEEDED: 'Maximum number of waypoints exceeded',
+      OVER_QUERY_LIMIT: 'Request rate exceeded',
+      REQUEST_DENIED: 'Request denied',
+      UNKNOWN_ERROR: 'Server error'
+    },
     'Origin': 'Origin',
-    'Travel Planner': 'Travel Planner'
+    'Travel Planner': 'Travel Planner',
+    'Unknown error': 'Unknown error'
   };
 }
 

@@ -2,21 +2,21 @@ var test = require('tape');
 
 var $ = require('../../src/util/jquery');
 
-var Maps = require('../../src/components/maps');
+var Map = require('../../src/components/map');
 var message = require ('../../src/components/message');
 
 var mockMaps = require('../../mocks/google-maps');
 
 test('message display', function(t) {
-  var maps = new Maps({
+  var map = new Map({
     maps: mockMaps
   });
 
-  var $messages = $('.messages', maps.$);
+  var $messages = $('.messages', map.$);
   t.ok($messages.length, 'message display exists');
   t.equals($messages.children().length, 0, 'message display is empty');
 
-  maps.message(message.info('Test message.'));
+  map.message(message.info('Test message.'));
 
   var $messageItem = $messages.children();
   t.equals($messageItem.length, 1, 'message display shows 1 message');

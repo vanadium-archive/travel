@@ -39,6 +39,10 @@ var Destination = defineClass({
   },
 
   publics: {
+    focus: function() {
+      this.$.find('input:visible').focus();
+    },
+
     setSearchBounds: function(bounds) {
       this.searchBox.setBounds(bounds);
     },
@@ -60,6 +64,7 @@ var Destination = defineClass({
     },
 
     set: function(placeDesc, updateSearchBox) {
+      var prev = this.place;
       var normalized = this.normalizeDestination(placeDesc);
 
       this.setAutocomplete(!normalized);
@@ -68,8 +73,30 @@ var Destination = defineClass({
         this.$searchBox.prop('value', normalized.display);
       }
 
-      this.place = normalized && normalized.place;
-      this.onSet(normalized);
+      this.place = normalized && normalized;
+      this.onSet(normalized, prev);
+    },
+
+    getNext: function() {
+      return this.next;
+    },
+
+    bindNext: function(next) {
+      if (this.next !== next) {
+        this.next = next;
+        next.bindPrevious(this.ifc);
+      }
+    },
+
+    getPrevious: function() {
+      return this.prev;
+    },
+
+    bindPrevious: function(prev) {
+      if (this.prev !== prev) {
+        this.prev = prev;
+        prev.bindNext(this.ifc);
+      }
     }
   },
 
@@ -115,6 +142,7 @@ var Destination = defineClass({
     /**
      * fired when the destination has been set to a place, or cleared.
      * @param place the new destination, as a normalized place.
+     * @param previous the old destination, as a normalized place.
      */
     'onSet'
   ],

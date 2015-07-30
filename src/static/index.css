@@ -8,6 +8,20 @@ body {
   width: 30em;
 }
 
+.add-bn {
+  border-radius: 16px;
+  border: 1px solid #aaa;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  color: #aaa;
+  background-color: white;
+  text-align: center;
+  margin-top: 4px;
+  font-size: 27px;
+  font-weight: lighter;
+}
+
 .destination {
   width: 100%;
   position: relative;

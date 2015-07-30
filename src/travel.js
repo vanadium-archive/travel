@@ -5,18 +5,28 @@ var vanadiumWrapperDefault = require('./vanadium-wrapper');
 
 var defineClass = require('./util/define-class');
 
-var Maps = require('./components/maps');
+var Map = require('./components/map');
 var TravelSync = require('./travelsync');
 var Identity = require('./identity');
+
+var strings = require('./strings').currentLocale;
+
+function buildStatusErrorStringMap(statusClass, stringGroup) {
+  var dict = {};
+  $.each(statusClass, function(name, value) {
+    dict[value] = stringGroup[name];
+  });
+  return dict;
+}
 
 var Travel = defineClass({
   publics: {
     error: function (err) {
-      this.maps.message(message.error(err.toString()));
+      this.map.message(message.error(err.toString()));
     },
 
     info: function (info) {
-      this.maps.message(message.info(info));
+      this.map.message(message.info(info));
     }
   },
 
@@ -38,9 +48,20 @@ var Travel = defineClass({
         travel.sync.start(identity.mountName, wrapper).catch(reportError);
       }, reportError);
 
-    this.maps = new Maps(opts);
+    this.map = new Map(opts);
+
+    var directionsServiceStatusStrings = buildStatusErrorStringMap(
+      this.map.maps.DirectionsStatus, strings.DirectionsStatus);
+
+    this.map.onError.add(function(err) {
+      var message = directionsServiceStatusStrings[err.directionsStatus] ||
+        strings['Unknown error'];
+
+      reportError(message);
+    });
+
     var $domRoot = opts.domRoot? $(opts.domRoot) : $('body');
-    $domRoot.append(travel.maps.$);
+    $domRoot.append(travel.map.$);
   }
 });
 

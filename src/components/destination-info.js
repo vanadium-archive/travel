@@ -3,9 +3,10 @@ var defineClass = require('../util/define-class');
 
 /**
  * Given a Maps API address_components array, return an array of formatted
- * address lines.
+ * address lines. This code is highly fragile and heaven help the poor soul who
+ * needs to localize it.
  *
- * TODO(rosswang): Is this really the best way?
+ * TODO(rosswang): Is this really the best way? We should find a formatter.
  */
 function formatAddress(details) {
   //some maps API members are lower_underscore
@@ -16,22 +17,56 @@ function formatAddress(details) {
     return [];
   }
 
+  /* If at any point the first line/atom will echo the place name/search query,
+   * leave it out, as it will be the title of the info box anyway. */
+
   var parts = addr.split(', ');
-  switch (parts.length) {
-    case 1:
-      return [addr];
-    case 2:
-      return parts.join(', ');
-    case 3:
-      return parts[0] === details.name?
-        [parts[1] + ', ' + parts[2]] : [parts[0] + ', ' + parts[1]];
-    case 4:
-      var line1 = parts[0];
-      var line2 = parts[1] + ', ' + parts[2];
-      return line1 === details.name? [line2] : [line1, line2];
-    default:
-      return parts;
-  }
+  var lines = (function() {
+    switch (parts.length) {
+      case 2:
+        // ex. WA, USA => WA, USA
+        return [parts.join(', ')];
+      case 3:
+        // ex. Seattle, WA, USA => Seattle, WA || WA, USA
+        // (if Seattle was the search query, format as if it were WA, USA)
+        return parts[0] === details.name?
+          [parts[1] + ', ' + parts[2]] : [parts[0] + ', ' + parts[1]];
+      case 4: {
+        /* ex. Amphitheatre Pkwy, Mountain View, CA 94043, USA:
+         *
+         * Amphitheatre Pkwy
+         * Mountain View, CA 94043
+         */
+        return [parts[0], parts[1] + ', ' + parts[2]];
+      }
+      case 5: {
+        /* ex. Fort Mason, 2 Marina Blvd, San Francisco, CA 94123, USA
+         *
+         * Fort Mason
+         * 2 Marina Blvd
+         * San Francisco, CA 94123
+         */
+        return [parts[0], parts[1], parts[2] + ', ' + parts[3]];
+      }
+      case 6: {
+        /* ex. A, Fort Mason, 2 Marina Blvd, San Francisco, CA 94123, USA
+         *
+         * A, Fort Mason
+         * 2 Marina Blvd
+         * San Francisco, CA 94123
+         */
+        return [
+          parts[0] + ', ' + parts[1],
+          parts[2],
+          parts[3] + ', ' + parts[4]
+        ];
+      }
+      default:
+        return parts;
+    }
+  })();
+
+  return lines[0] === details.name? lines.slice(1) : lines;
 }
 
 function render(details) {
