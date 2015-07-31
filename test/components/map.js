@@ -16,7 +16,7 @@ test('message display', function(t) {
     maps: mockMaps
   });
 
-  var $messages = $('.messages', map.$);
+  var $messages = $('.messages ul', map.$);
   t.ok($messages.length, 'message display exists');
   t.equals($messages.children().length, 0, 'message display is empty');
 

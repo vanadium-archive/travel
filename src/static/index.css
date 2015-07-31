@@ -63,20 +63,75 @@ body {
   height: 100%;
 }
 
-ul.messages {
+.messages {
   width: 30%;
-  min-width: 10em;
+  border: 1px solid #aaa;
+  border-radius: 2px;
+}
+
+.messages.headlines {
+  border: initial;
+}
+
+.messages .handle {
+  background-color: rgba(192, 192, 192, .95);
+  border: 1px solid #aaa;
+  border-radius: 2px;
+  color: #444;
+  cursor: pointer;
+  text-align: center;
+
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+.messages.headlines .handle {
+  background-color: rgba(255, 255, 255, .5);
+  border: initial;
+}
+
+.handle:before {
+  content: "=";
+  font-stretch: expanded;
+}
+
+.handle:after {
+  content: "=";
+  font-stretch: expanded;
+}
+
+.messages ul {
+  background-color: rgba(255, 255, 255, .95);
   list-style: none;
+  margin: 0;
+  max-height: 20em;
+  overflow: auto;
+  min-width: 10em;
+  padding: 0;
+  width: 100%;
+}
+
+.messages.headlines ul {
+  background-color: initial;
+  max-height: initial;
 }
 
 .messages li {
-  color: #FFF;
-  background-color: rgba(0, 0, 0, .6);
   font-size: 10pt;
   padding: 3px 3px 3px 1em;
-  border-radius: 4px;
-  margin-bottom: 3px;
   text-indent: -.5em;
+}
+
+.messages.headlines li {
+  background-color: rgba(0, 0, 0, .6);
+  border-radius: 4px;
+  color: white;
+  display: none;
+  margin-top: 3px;
 }
 
 .messages li:before {
