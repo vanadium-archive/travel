@@ -3,6 +3,7 @@
 // license that can be found in the LICENSE file.
 
 var defineClass = require('../src/util/define-class');
+var Deferred = require('vanadium/src/lib/deferred');
 
 var MockRuntime = defineClass({
   publics: {
@@ -29,11 +30,16 @@ var MockVanadium = defineClass({
   publics: {
     init: function(config, callback) {
       this.t.ok(config, 'has config');
-      this.callback = callback;
+      this.deferred = new Deferred(callback);
+      return this.deferred.promise;
     },
 
     finishInit: function(err, runtime) {
-      this.callback(err, runtime);
+      if (err) {
+        this.deferred.reject(err);
+      } else {
+        this.deferred.resolve(runtime);
+      }
     }
   },
 

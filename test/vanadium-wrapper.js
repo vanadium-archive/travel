@@ -26,9 +26,10 @@ function setUpCrashTest(t) {
     }
   };
 
-  vanadiumWrapper.init(mockVanadium).then(
+  var promise = vanadiumWrapper.init(mockVanadium).then(
     function(v) {
       context.vanadiumWrapper = v;
+      return context;
     },
     function(err) {
       t.fail('init error');
@@ -36,26 +37,27 @@ function setUpCrashTest(t) {
 
   mockVanadium.finishInit(null, mockRuntime);
 
-  return context;
+  return promise;
 }
 
 test('crashBefore', function(t) {
-  var crashTest = setUpCrashTest(t);
+  setUpCrashTest(t).then(function(crashTest) {
+    crashTest.crash('I lost the game.');
+    crashTest.bindCrashHandler();
+    t.equal(crashTest.crashErr, 'I lost the game.');
 
-  crashTest.crash('I lost the game.');
-  crashTest.bindCrashHandler();
-  t.equal(crashTest.crashErr, 'I lost the game.');
-
-  t.end();
+    t.end();
+  });
 });
 
 test('crashAfter', function(t) {
-  var crashTest = setUpCrashTest(t);
-  crashTest.bindCrashHandler();
-  t.notOk(crashTest.crashErr, 'no crash yet');
+  setUpCrashTest(t).then(function(crashTest) {
+    crashTest.bindCrashHandler();
+    t.notOk(crashTest.crashErr, 'no crash yet');
 
-  crashTest.crash('I lost the game.');
-  t.equal(crashTest.crashErr, 'I lost the game.');
+    crashTest.crash('I lost the game.');
+    t.equal(crashTest.crashErr, 'I lost the game.');
 
-  t.end();
+    t.end();
+  });
 });

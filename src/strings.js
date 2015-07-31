@@ -4,6 +4,8 @@
 
 function getStrings(locale) {
   return {
+    'Connected to all services.': 'Connected to all services.',
+    'Connecting...': 'Connecting...',
     'Destination': 'Destination',
     destination: function(n) {
       return 'Destination ' + n;

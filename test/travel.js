@@ -24,27 +24,6 @@ test('init', function(t) {
   cleanDom();
 });
 
-test('message display', function(t) {
-  var travel = new Travel({
-    vanadiumWrapper: mockVanadiumWrapper,
-    maps: mockMaps
-  });
-
-  var $messages = $('.messages ul');
-  t.ok($messages.length, 'message display exists');
-  t.equals($messages.children().length, 0, 'message display is empty');
-
-  travel.info('Test message.');
-
-  var $messageItem = $messages.children();
-  t.equals($messageItem.length, 1, 'message display shows 1 message');
-  t.equals($messageItem.text(), 'Test message.',
-    'message displays message text');
-
-  t.end();
-  cleanDom();
-});
-
 test('domRoot', function(t) {
   var $root = $('<div>');
   var root = $root[0];

@@ -2,10 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-var $ = require('./util/jquery');
-
 var vanadiumDefault = require('vanadium');
-var defineClass = require('./util/define-class');
+var defineClass = require('../util/define-class');
+
+var SyncbaseWrapper = require('./syncbase-wrapper');
 
 var VanadiumWrapper = defineClass({
   init: function(runtime) {
@@ -34,6 +34,13 @@ var VanadiumWrapper = defineClass({
      */
     server: function(endpoint, server) {
       return this.runtime.newServer().serve(endpoint, server);
+    },
+
+    /**
+     * @param endpoint Vanadium name
+     */
+    syncbase: function(endpoint) {
+      return SyncbaseWrapper.start(this.runtime.getContext(), endpoint);
     }
   },
 
@@ -56,16 +63,8 @@ module.exports = {
       appName: 'Travel Planner'
     };
 
-    var async = $.Deferred();
-
-    vanadium.init(config, function(err, runtime) {
-      if (err) {
-        async.reject(err);
-      } else {
-        async.resolve(new VanadiumWrapper(runtime));
-      }
+    return vanadium.init(config).then(function(runtime) {
+      return new VanadiumWrapper(runtime);
     });
-
-    return async.promise();
   }
 };

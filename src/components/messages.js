@@ -13,30 +13,31 @@ var Messages = defineClass({
     TTL: 9000,
     FADE: 1000,
     SLIDE_UP: 300,
-    OPEN_CLOSE: 500
+    OPEN_CLOSE: 400
   },
 
   publics: {
     close: function() {
       var self = this;
+      var $messages = this.$messages;
 
       if (this.isOpen()) {
-        if (this.$messages.children().length) {
+        if ($messages.children().length) {
           var scrollOffset =
-            this.$messages.scrollTop() + self.$messages.height();
+            $messages.scrollTop() + $messages.height();
 
           this.$messages
             .addClass('animating')
             .animate({ height: 0 }, {
               duration: this.OPEN_CLOSE,
               progress: function() {
-                self.$messages.scrollTop(
-                  scrollOffset - self.$messages.height());
+                $messages.scrollTop(
+                  scrollOffset - $messages.height());
               },
               complete: function() {
-                self.$messages.removeClass('animating');
+                $messages.removeClass('animating');
                 self.$.addClass('headlines');
-                self.$messages.attr('style', null);
+                $messages.attr('style', null);
               }
             });
         } else {
@@ -46,8 +47,7 @@ var Messages = defineClass({
     },
 
     isClosed: function() {
-      return this.$.hasClass('headlines') &&
-        !this.$messages.hasClass('animating');
+      return this.$.hasClass('headlines');
     },
 
     isOpen: function() {
@@ -56,28 +56,28 @@ var Messages = defineClass({
     },
 
     open: function() {
-      var self = this;
+      var $messages = this.$messages;
 
       if (!this.isOpen()) {
-        var $animating = this.$.find('.animating');
-        $animating.stop(true);
-        $animating.removeClass('animating');
-        $animating.attr('style', null);
+        this.$.find('.animating')
+          .stop(true)
+          .removeClass('animating')
+          .attr('style', null);
 
         this.$.removeClass('headlines');
-        if (this.$messages.children().length) {
-          var goalHeight = this.$messages.height();
-          this.$messages
+        if ($messages.children().length) {
+          var goalHeight = $messages.height();
+          $messages
             .addClass('animating')
             .height(0)
             .animate({ height: goalHeight }, {
               duration: this.OPEN_CLOSE,
               progress: function() {
-                self.$messages.scrollTop(self.$messages.prop('scrollHeight'));
+                $messages.scrollTop($messages.prop('scrollHeight'));
               },
               complete: function() {
-                self.$messages.removeClass('animating');
-                self.$messages.attr('style', null);
+                $messages.removeClass('animating');
+                $messages.attr('style', null);
               }
             });
         }
@@ -85,6 +85,8 @@ var Messages = defineClass({
     },
 
     push: function(messageData) {
+      var self = this;
+
       var messageObject = new message.Message(messageData);
       this.$messages.append(messageObject.$);
 
@@ -107,17 +109,28 @@ var Messages = defineClass({
          * It would be best to use CSS animations, but at this time that would
          * mean sacrificing either auto-height or flow-affecting sliding.
          */
-        messageObject.$.addClass('animating');
         messageObject.$
-          .slideDown(this.SLIDE_DOWN)
-          .delay(this.TTL)
-          .animate({ opacity: 0 }, this.FADE)
-          .slideUp(this.SLIDE_UP, function() {
-            messageObject.$
-              .removeClass('animating')
-              .attr('style', null);
-          });
+          .addClass('animating')
+          .hide()
+          .slideDown(this.SLIDE_DOWN);
       }
+
+      messageObject.onLowerPriority.add(function() {
+        messageObject.$.addClass('history');
+
+        if (self.isClosed()) {
+          messageObject.$
+            .addClass('animating')
+            .show()
+            .delay(Messages.TTL)
+            .animate({ opacity: 0 }, Messages.FADE)
+            .slideUp(Messages.SLIDE_UP, function() {
+              messageObject.$
+                .removeClass('animating')
+                .attr('style', null);
+            });
+        }
+      });
     },
 
     toggle: function() {

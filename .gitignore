@@ -2,3 +2,5 @@
 /ifc
 /node_modules
 /server-root
+/bin
+/tmp

@@ -15,6 +15,7 @@
   "dependencies": {
     "global": "^4.3.0",
     "jquery": "^2.1.4",
+    "es6-promisify": "^2.0.0",
     "uuid": "^2.0.1"
   }
 }

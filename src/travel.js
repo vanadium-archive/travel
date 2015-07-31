@@ -29,8 +29,10 @@ var Travel = defineClass({
       this.map.message(message.error(err.toString()));
     },
 
-    info: function (info) {
-      this.map.message(message.info(info));
+    info: function (info, promise) {
+      var messageData = message.info(info);
+      messageData.promise = promise;
+      this.map.message(messageData);
     }
   },
 
@@ -39,20 +41,24 @@ var Travel = defineClass({
     var vanadiumWrapper = opts.vanadiumWrapper || vanadiumWrapperDefault;
     var travel = this;
 
+    this.map = new Map(opts);
     this.sync = new TravelSync();
 
     var reportError = $.proxy(this, 'error');
 
-    vanadiumWrapper.init(opts.vanadium).then(
-      function(wrapper) {
+    this.info(strings['Connecting...'], vanadiumWrapper.init(opts.vanadium)
+      .then(function(wrapper) {
         wrapper.onCrash.add(reportError);
 
         var identity = new Identity(wrapper.getAccountName());
         identity.mountName = makeMountName(identity);
-        travel.sync.start(identity.mountName, wrapper).catch(reportError);
-      }, reportError);
-
-    this.map = new Map(opts);
+        return travel.sync.start(identity.mountName, wrapper);
+      }).then(function() {
+        return strings['Connected to all services.'];
+      }, function(err) {
+        console.error(err);
+        throw err;
+      }));
 
     var directionsServiceStatusStrings = buildStatusErrorStringMap(
       this.map.maps.DirectionsStatus, strings.DirectionsStatus);

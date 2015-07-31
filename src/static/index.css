@@ -75,11 +75,12 @@ body {
 
 .messages .handle {
   background-color: rgba(192, 192, 192, .95);
-  border: 1px solid #aaa;
+  border-bottom: 1px solid #aaa;
   border-radius: 2px;
   color: #444;
   cursor: pointer;
   text-align: center;
+  transition: background-color .2s, border-bottom .2s;
 
   -webkit-touch-callout: none;
   -webkit-user-select: none;
@@ -91,7 +92,8 @@ body {
 
 .messages.headlines .handle {
   background-color: rgba(255, 255, 255, .5);
-  border: initial;
+  border-bottom: initial;
+  transition: background-color .2s, border-bottom .2s;
 }
 
 .handle:before {
@@ -130,8 +132,11 @@ body {
   background-color: rgba(0, 0, 0, .6);
   border-radius: 4px;
   color: white;
-  display: none;
   margin-top: 3px;
+}
+
+.messages.headlines li.history {
+  display: none;
 }
 
 .messages li:before {
