@@ -58,6 +58,10 @@ var Destination = defineClass({
 
     getPrevious: function() {
       return this.hasPrevious()? this.list.get(this.index - 1) : null;
+    },
+
+    remove: function() {
+      this.list.remove(this.index);
     }
   },
 
@@ -88,6 +92,15 @@ var Destination = defineClass({
     'onDeselect'
   ],
 
+  /**
+   * @param list the containing `Destinations` instance.
+   * @param index the index within the parent list
+   * @param callbacks an object that will be assigned members for utility
+   *  callbacks that the caller can use:
+   *    <ul>
+   *      <li>ordinalChange - fires this destination's `onOrdinalChange` event.
+   *    </ul>
+   */
   init: function(list, index, callbacks) {
     this.list = list;
     this.selected = false;

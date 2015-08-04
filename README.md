@@ -37,10 +37,27 @@ start syncbase, use:
 
     make bootstrap
 
+or
+
+    make boostrap port=<syncbase port>
+
+Related targets:
+
+    make creds
+    make syncbase [port=<syncbase port>]
+
 To run a local dev server use:
 
     make start
 
-If you would like to change the host and or port that is used:
+If you would like to change the port that is used:
 
     make start port=<port>
+
+To connect to a syncbase instance other than the default, navigate to:
+
+    localhost:<server port>
+
+or
+
+    localhost:<server port>/?syncbase=<syncbase port>

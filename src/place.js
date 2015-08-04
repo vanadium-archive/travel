@@ -2,9 +2,31 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+var Deferred = require('vanadium/src/lib/deferred');
+
 var defineClass = require('./util/define-class');
 
 var Place = defineClass({
+  statics: {
+    fromObject: function(dependencies, obj) {
+      var async = new Deferred();
+
+      if (obj.placeId) {
+        dependencies.placesService.getDetails(obj, function(place, status) {
+          if (status === dependencies.maps.places.PlacesServiceStatus.OK) {
+            async.resolve(new Place(place));
+          } else {
+            async.reject(status);
+          }
+        });
+      } else {
+        async.reject('Deserialization not supported.'); //TODO(rosswang)
+      }
+
+      return async.promise;
+    }
+  },
+
   publics: {
     getDetails: function() {
       return this.details;
@@ -124,6 +146,31 @@ var Place = defineClass({
       })();
 
       return lines[0] === name? lines.slice(1) : lines;
+    },
+
+    /**
+     * Returns a plain object that can be used to reconstruct the place. This
+     * object really shouldn't be mutated.
+     */
+    toObject: function() {
+      if (this.placeObj.placeId) {
+        return {
+          placeId: this.placeObj.placeId
+        };
+      } else {
+        return {
+          location: {
+            lat: this.placeObj.location.lat(),
+            lng: this.placeObj.location.lng()
+          },
+          query: this.placeObj.query
+        };
+      }
+    },
+
+    toKey: function() {
+      return this.placeObj.placeId ||
+        (this.placeObj.query || '') + this.placeObj.location.toString();
     }
   },
 

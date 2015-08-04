@@ -38,6 +38,7 @@ var DestinationMarker = defineClass({
   publics: {
     clear: function() {
       this.marker.setMap(null);
+      this.onClear();
     },
 
     pushClient: function(client, color) {
@@ -74,6 +75,15 @@ var DestinationMarker = defineClass({
 
     getClient: function() {
       return this.topClient().client;
+    },
+
+    hasClient: function(client) {
+      for (var i = 0; i < this.clients.length; i++) {
+        if (client === this.clients[0].client) {
+          return true;
+        }
+      }
+      return false;
     },
 
     setColor: function(color) {
@@ -136,7 +146,7 @@ var DestinationMarker = defineClass({
     }
   },
 
-  events: [ 'onClick' ],
+  events: [ 'onClick', 'onClear' ],
   constants: [ 'marker', 'place' ],
 
   /**

@@ -7,7 +7,15 @@ var $ = require('./util/jquery');
 /**
  * Global variable exports for console debug.
  */
-module.exports = function(app) {
+function debug(app) {
   global.travel = app;
   global.$ = $;
+}
+
+debug.log = function(message) {
+  if (console.debug) {
+    console.debug(message);
+  }
 };
+
+module.exports = debug;

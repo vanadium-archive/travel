@@ -5,6 +5,9 @@
 function getStrings(locale) {
   return {
     'Add destination': 'Add destination',
+    add: function(object) {
+      return 'Add ' + object.toLowerCase();
+    },
     change: function(object) {
       return 'Change ' + object.toLowerCase();
     },

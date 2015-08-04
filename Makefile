@@ -1,5 +1,5 @@
 PATH := node_modules/.bin:$(PATH)
-PATH := $(PATH):$(V23_ROOT)/third_party/cout/node/bin:$(V23_ROOT)/release/go/bin
+PATH := $(V23_ROOT)/third_party/cout/node/bin:$(V23_ROOT)/release/go/bin:$(PATH)
 
 .DEFAULT_GOAL := all
 

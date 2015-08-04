@@ -9,7 +9,7 @@ var Destination = require('./destination');
 var Destinations = defineClass({
   publics: {
     add: function(index) {
-      index = index || this.destinations.length;
+      index = index !== undefined? index : this.destinations.length;
 
       var isLast = index === this.destinations.length;
 
@@ -21,8 +21,6 @@ var Destinations = defineClass({
         destination: destination
       });
 
-      this.onAdd(destination);
-
       if (isLast && index > 0) {
         //old last is no longer last
         this.destinations[index - 1].callbacks.ordinalChange(index - 1);
@@ -30,6 +28,8 @@ var Destinations = defineClass({
       for (var i = index + 1; i < this.destinations.length; i++) {
         this.destinations[i].callbacks.ordinalChange(i);
       }
+
+      this.onAdd(destination);
 
       return destination;
     },
@@ -66,8 +66,6 @@ var Destinations = defineClass({
 
       var removed = this.destinations.splice(i, 1)[0];
       if (removed) {
-        this.onRemove(removed);
-
         if (i === this.destinations.length && i > 0) {
           //new last
           this.destinations[i - 1].callbacks.ordinalChange(i - 1);
@@ -75,6 +73,8 @@ var Destinations = defineClass({
         for (var j = i; j < this.destinations.length; j++) {
           this.destinations[j].callbacks.ordinalChange(j);
         }
+
+        this.onRemove(removed.destination);
 
         return removed.destination;
       }

@@ -169,6 +169,67 @@ body {
   color: red;
 }
 
+.label {
+  color: blue;
+  margin-right: .4em;
+}
+
+.messages.headlines .label {
+  background-color: rgba(255, 255, 255, .8);
+  border-radius: 3px;
+  padding: .1em .3em .1em .4em;
+}
+
+.label:after {
+  content: ':'
+}
+
+.label.no-timestamp.no-sender {
+  display: none;
+}
+
+.username {
+  font-weight: bold;
+}
+
+.timestamp:before {
+  content: ' (';
+}
+
+.timestamp:after {
+  content: ')';
+}
+
+.no-sender .timestamp:before {
+  content: initial;
+}
+
+.no-sender .timestamp:after {
+  content: initial;
+}
+
+.send {
+  background-color: silver;
+}
+
+.send div {
+  overflow: hidden;
+}
+
+.send input {
+  width: 100%;
+}
+
+.messages.headlines .send {
+  display: none;
+}
+
+.send .label {
+  background-color: initial;
+  float: left;
+  margin: .4em .5em .1em .5em;
+}
+
 .mini-search {
   overflow: hidden;
   vertical-align: middle;

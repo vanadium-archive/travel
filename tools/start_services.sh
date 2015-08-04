@@ -26,12 +26,10 @@ kill_child_processes() {
 }
 main() {
   local -r TMP=tmp
-  local -r PORT=${PORT-4000}
+  local -r PORT=${port-4000}
   local -r MOUNTTABLED_ADDR=":$((PORT+1))"
-  local -r SYNCBASED_ADDR=":$((PORT+2))"
+  local -r SYNCBASED_ADDR=":$((PORT))"
   mkdir -p $TMP
-  # TODO(rosswang): Run mounttabled and syncbased each with its own blessing
-  # extension.
   ${V23_ROOT}/release/go/bin/mounttabled \
     --v23.tcp.address=${MOUNTTABLED_ADDR} \
     --v23.credentials=${TMP}/creds &

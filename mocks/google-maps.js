@@ -149,6 +149,7 @@ module.exports = {
   },
 
   places: {
+    PlacesService: function(){},
     SearchBox: SearchBox,
     mockPlaceResult: {
       geometry: {}

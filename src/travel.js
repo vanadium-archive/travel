@@ -2,17 +2,21 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-var $ = require('./util/jquery');
 var raf = require('raf');
+var vanadium = require('vanadium');
+
+var $ = require('./util/jquery');
 var defineClass = require('./util/define-class');
 
 var AddButton = require('./components/add-button');
 var DestinationSearch = require('./components/destination-search');
-var Identity = require('./identity');
-var Map = require('./components/map');
+var MapWidget = require('./components/map-widget');
 var Messages = require('./components/messages');
 var Message = require('./components/message');
 var Timeline = require('./components/timeline');
+
+var Destinations = require('./destinations');
+var Identity = require('./identity');
 var TravelSync = require('./travelsync');
 
 var vanadiumWrapperDefault = require('./vanadium-wrapper');
@@ -67,14 +71,37 @@ function handleDestinationOrdinalUpdate(control, destination) {
   control.setPlaceholder(describeDestination.descriptionOpenEnded(destination));
 }
 
+function makeMountNames(id) {
+  // TODO: first-class app-wide rather than siloed by account
+  var parts = ['/ns.dev.v.io:8101', 'users', id.username, 'travel'];
+  var names = {
+    user: vanadium.naming.join(parts)
+  };
+
+  parts.push(id.deviceName);
+  names.device = vanadium.naming.join(parts);
+
+  return names;
+}
+
 var Travel = defineClass({
   publics: {
-    addDestination: function() {
+    error: function (err) {
+      this.messages.push(Message.error(err));
+    },
+
+    info: function (info, promise) {
+      var messageData = Message.info(info);
+      messageData.promise = promise;
+      this.messages.push(messageData);
+    }
+  },
+
+  privates: {
+    handleDestinationAdd: function(destination) {
       var map = this.map;
 
-      var destination = map.addDestination();
-      var control = this.timeline.append();
-
+      var control = this.timeline.add(destination.getIndex());
       bindControlToDestination(control, destination);
 
       control.setSearchBounds(map.getBounds());
@@ -97,12 +124,14 @@ var Travel = defineClass({
         map.showSearchResults(results);
       });
 
-      this.timeline.disableAdd();
-      var oldLast = this.timeline.get(-2);
-      if (oldLast) {
-        this.unbindLastDestinationSearchEvents(oldLast);
+      if (!destination.hasNext()) {
+        this.timeline.disableAdd();
+        var oldLast = this.timeline.get(-2);
+        if (oldLast) {
+          this.unbindLastDestinationSearchEvents(oldLast);
+        }
+        this.bindLastDestinationSearchEvents(control);
       }
-      this.bindLastDestinationSearchEvents(control);
 
       this.bindMiniFeedback(destination);
 
@@ -112,29 +141,47 @@ var Travel = defineClass({
       };
     },
 
-    error: function (err) {
-      this.messages.push(Message.error(err));
+    handleDestinationRemove: function(destination) {
+      var index = destination.getIndex();
+      this.unbindLastDestinationSearchEvents(this.timeline.remove(index));
+
+      if (index >= this.destinations.count()) {
+        var lastControl = this.timeline.get(-1);
+        if (lastControl) {
+          this.bindLastDestinationSearchEvents(lastControl);
+          this.handleLastPlaceChange(lastControl.getPlace());
+        }
+      }
+      //TODO(rosswang): reselect?
     },
 
-    info: function (info, promise) {
-      var messageData = Message.info(info);
-      messageData.promise = promise;
-      this.messages.push(messageData);
-    }
-  },
+    handleTimelineDestinationAdd: function() {
+      this.destinations.add();
+      this.timeline.get(-1).focus();
+    },
 
-  privates: {
-    /**
-     * Handles destination addition via the mini-UI.
-     */
-    addDestinationMini: function() {
+    handleMiniDestinationAdd: function() {
       this.miniDestinationSearch.clear();
       this.map.closeActiveInfoWindow();
 
-      var destination = this.addDestination().destination;
+      var selectedDest = this.map.getSelectedDestination();
+      var index = selectedDest?
+        selectedDest.getIndex() + 1 : this.destinations.count();
+
+      var destination = this.destinations.get(index);
+      if (!destination || destination.hasPlace()) {
+        destination = this.destinations.add(index);
+      }
+
       destination.select();
       this.miniDestinationSearch.focus();
-      this.miniDestinationSearch.setPlaceholder(strings['Add destination']);
+      this.miniDestinationSearch.setPlaceholder(
+        destination.hasNext()?
+          /* Actually, the terminal case where descriptionOpenEnded would differ
+           * from description is always handled by the latter branch, but
+           * semantically we would want the open-ended description here. */
+          strings.add(describeDestination.descriptionOpenEnded(destination)) :
+          strings['Add destination']);
     },
 
     bindMiniFeedback: function(destination) {
@@ -147,6 +194,8 @@ var Travel = defineClass({
     initMiniFeedback: function() {
       var self = this;
 
+      var selectedDestination;
+
       //context: destination
       function handlePlaceChange(place) {
         self.miniDestinationSearch.setPlace(place);
@@ -154,18 +203,23 @@ var Travel = defineClass({
           strings.change(describeDestination.description(this)));
       }
 
-      //context: destination.
+      //context: destination
       function handleSelect() {
+        selectedDestination = this;
         handlePlaceChange.call(this, this.getPlace());
         this.onPlaceChange.add(handlePlaceChange);
       }
 
+      //context: destination
       function handleDeselect() {
         this.onPlaceChange.remove(handlePlaceChange);
-        if (self.miniDestinationSearch.getPlace()) {
-          self.miniDestinationSearch.clear();
+        if (selectedDestination === this) {
+          selectedDestination = null;
+          if (self.miniDestinationSearch.getPlace()) {
+            self.miniDestinationSearch.clear();
+          }
+          self.miniDestinationSearch.setPlaceholder(strings['Search']);
         }
-        self.miniDestinationSearch.setPlaceholder(strings['Search']);
       }
 
       this.miniFeedback = {
@@ -218,25 +272,18 @@ var Travel = defineClass({
     },
 
     handleLastPlaceDeselected: function() {
-      var self = this;
       /* Wait until next frame to allow selection/focus to update; we don't want
        * to remove a box that has just received focus. */
-      raf(function() {
-        var lastControl = self.timeline.get(-1);
-        var oldLast = lastControl;
+      raf(this.trimUnusedDestinations);
+    },
 
-        while (!lastControl.getPlace() && !lastControl.isSelected() &&
-            self.timeline.get().length > 1) {
-          self.timeline.remove(-1);
-          self.map.removeDestination(-1);
-          lastControl = self.timeline.get(-1);
-        }
-
-        if (oldLast !== lastControl) {
-          self.bindLastDestinationSearchEvents(lastControl);
-          self.handleLastPlaceChange(lastControl.getPlace());
-        }
-      });
+    trimUnusedDestinations: function() {
+      for (var lastControl = this.timeline.get(-1);
+          !lastControl.getPlace() && !lastControl.isSelected() &&
+            this.destinations.count() > 1;
+          lastControl = this.timeline.get(-1)) {
+        this.destinations.remove(-1);
+      }
     },
 
     /**
@@ -267,24 +314,45 @@ var Travel = defineClass({
     opts = opts || {};
     var vanadiumWrapper = opts.vanadiumWrapper || vanadiumWrapperDefault;
 
-    var map = this.map = new Map(opts);
+    var destinations = this.destinations = new Destinations();
+    destinations.onAdd.add(this.handleDestinationAdd);
+    destinations.onRemove.add(this.handleDestinationRemove);
+
+    var map = this.map = new MapWidget(opts);
     var maps = map.maps;
+    map.bindDestinations(destinations);
 
     var messages = this.messages = new Messages();
     var timeline = this.timeline = new Timeline(maps);
 
-    var sync = this.sync = new TravelSync();
-
     var error = this.error;
-
-    this.info(strings['Connecting...'], vanadiumWrapper.init(opts.vanadium)
+    var vanadiumStartup = vanadiumWrapper.init(opts.vanadium)
       .then(function(wrapper) {
+        wrapper.onError.add(error);
         wrapper.onCrash.add(error);
 
         var identity = new Identity(wrapper.getAccountName());
-        identity.mountName = makeMountName(identity);
-        return sync.start(identity.mountName, wrapper);
-      }).then(function() {
+        identity.mountNames = makeMountNames(identity);
+        messages.setUsername(identity.username);
+
+        return {
+          identity: identity,
+          vanadiumWrapper: wrapper
+        };
+      });
+
+    var sync = this.sync = new TravelSync(vanadiumStartup, {
+      maps: maps,
+      placesService: map.createPlacesService()
+    });
+    sync.bindDestinations(destinations);
+
+    this.info(strings['Connecting...'], sync.startup
+      .then(function() {
+        /* Fit whatever's in the map via timeout to simplify the coding a
+         * little. Otherwise we'd need to hook into the asynchronous place
+         * vivification and routing. */
+        setTimeout(map.fitAll, 2250);
         return strings['Connected to all services.'];
       }));
 
@@ -298,15 +366,22 @@ var Travel = defineClass({
       error(message);
     });
 
-    timeline.onAddClick.add(function() {
-      self.addDestination().control.focus();
+    sync.onError.add(error);
+    sync.onMessages.add(function(messages) {
+      self.messages.push.apply(self.messages, messages);
     });
+
+    messages.onMessage.add(function(message) {
+      sync.message(message);
+    });
+
+    timeline.onAddClick.add(this.handleTimelineDestinationAdd);
 
     var miniAddButton = this.miniAddButton = new AddButton();
     var miniDestinationSearch = this.miniDestinationSearch =
       new DestinationSearch(maps);
 
-    miniAddButton.onClick.add(this.addDestinationMini);
+    miniAddButton.onClick.add(this.handleMiniDestinationAdd);
 
     miniDestinationSearch.setPlaceholder(strings['Search']);
     miniDestinationSearch.setSearchBounds(map.getBounds());
@@ -327,6 +402,17 @@ var Travel = defineClass({
     miniDestinationSearch.onPlaceChange.add(function(place) {
       if (!place) {
         self.map.enableLocationSelection();
+      }
+    });
+
+    miniDestinationSearch.onSubmit.add(function(value) {
+      if (!value) {
+        var selected = self.map.getSelectedDestination();
+        if (selected) {
+          selected.remove();
+        }
+
+        self.map.clearSearchMarkers();
       }
     });
 
@@ -359,14 +445,9 @@ var Travel = defineClass({
 
     this.initMiniFeedback();
 
-    this.addDestination();
+    destinations.add();
     miniDestinationSearch.focus();
   }
 });
-
-function makeMountName(id) {
-  // TODO: first-class app-wide rather than siloed by account
-  return 'users/' + id.username + '/travel/' + id.deviceName;
-}
 
 module.exports = Travel;

@@ -73,6 +73,10 @@ var DestinationSearch = defineClass({
 
     setPlaceholder: function(placeholder) {
       this.$searchBox.attr('placeholder', placeholder);
+    },
+
+    getValue: function() {
+      return this.$searchBox.prop('value');
     }
   },
 
@@ -115,6 +119,12 @@ var DestinationSearch = defineClass({
           $(newBox).focus();
         }
       }
+    },
+
+    inputKey: function(e) {
+      if (e.which === 13) {
+        this.onSubmit(this.getValue());
+      }
     }
   },
 
@@ -135,7 +145,16 @@ var DestinationSearch = defineClass({
      */
     'onSearch',
 
-    'onDeselect'
+    'onDeselect',
+
+    /**
+     * Event fired when the enter key is pressed. This is distinct from the
+     * onSearch event, which is fired when valid location properties are chosen,
+     * which can happen without onSubmit in the case of an autocomplete.
+     *
+     * @param value the current control text.
+     */
+    'onSubmit'
   ],
 
   constants: ['$'],
@@ -154,7 +173,7 @@ var DestinationSearch = defineClass({
     $searchBox.focus(this.onFocus);
     $searchBox.on('input', function() {
       self.setPlace(null);
-    });
+    }).keypress(this.inputKey);
 
     this.$ = $('<div>')
       .addClass('destination autocomplete')

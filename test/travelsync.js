@@ -4,9 +4,11 @@
 
 var test = require('tape');
 
+var Deferred = require('vanadium/src/lib/deferred');
+
 var TravelSync = require('../src/travelsync');
 
 test('init', function(t) {
-  t.ok(new TravelSync(), 'initializes');
+  t.ok(new TravelSync(new Deferred().promise), 'initializes');
   t.end();
 });

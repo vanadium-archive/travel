@@ -24,6 +24,9 @@
   "node": true,
 
   "globals": {
-    "window": true
+    "window": true,
+    "Map": true,
+    "Promise": true,
+    "Set": true
   }
 }

@@ -13,7 +13,9 @@ var Messages = defineClass({
     TTL: 9000,
     FADE: 1000,
     SLIDE_UP: 300,
-    OPEN_CLOSE: 400
+    OPEN_CLOSE: 400,
+
+    OLD: 30000
   },
 
   publics: {
@@ -81,17 +83,58 @@ var Messages = defineClass({
               }
             });
         }
+
+        this.$content.focus();
       }
     },
 
     push: function(messageData) {
       var self = this;
+      $.each(arguments, function() {
+        self.pushOne(this);
+      });
+    },
+
+    setUsername: function(username) {
+      this.username = username;
+      this.$username.text(username);
+    },
+
+    toggle: function() {
+      /* If this were pure CSS, we could just toggle, but we need to do some
+       * JS housekeeping. */
+      if (this.isOpen()) {
+        this.close();
+      } else if (this.isClosed()) {
+        this.open();
+      }
+    }
+  },
+
+  privates: {
+    inputKey: function(e) {
+      if (e.which === 13) {
+        var message = Message.info(this.$content.prop('value'));
+        message.sender = this.username;
+        this.$content.prop('value', '');
+        this.onMessage(message);
+      }
+    },
+
+    pushOne: function(messageData) {
+      var self = this;
 
       var messageObject = new Message(messageData);
       this.$messages.append(messageObject.$);
 
+      var isOld = messageData.timestamp !== undefined &&
+        messageData.timestamp !== null &&
+        Date.now() - messageData.timestamp >= Messages.OLD;
+
       if (this.isOpen()) {
         this.$messages.scrollTop(this.$messages.prop('scrollHeight'));
+      } else if (isOld) {
+        messageObject.$.addClass('history');
       } else {
         /*
          * Implementation notes: slideDown won't work properly (won't be able to
@@ -115,47 +158,49 @@ var Messages = defineClass({
           .slideDown(this.SLIDE_DOWN);
       }
 
-      messageObject.onLowerPriority.add(function() {
-        messageObject.$.addClass('history');
+      if (!isOld) {
+        messageObject.onLowerPriority.add(function() {
+          messageObject.$.addClass('history');
 
-        if (self.isClosed()) {
-          messageObject.$
-            .addClass('animating')
-            .show()
-            .delay(Messages.TTL)
-            .animate({ opacity: 0 }, Messages.FADE)
-            .slideUp(Messages.SLIDE_UP, function() {
-              messageObject.$
-                .removeClass('animating')
-                .attr('style', null);
-            });
-        }
-      });
-    },
-
-    toggle: function() {
-      /* If this were pure CSS, we could just toggle, but we need to do some
-       * JS housekeeping. */
-      if (this.isOpen()) {
-        this.close();
-      } else if (this.isClosed()) {
-        this.open();
+          if (self.isClosed()) {
+            messageObject.$
+              .addClass('animating')
+              .show()
+              .delay(Messages.TTL)
+              .animate({ opacity: 0 }, Messages.FADE)
+              .slideUp(Messages.SLIDE_UP, function() {
+                messageObject.$
+                  .removeClass('animating')
+                  .attr('style', null);
+              });
+          }
+        });
       }
     }
   },
 
   constants: ['$'],
+  events: [ 'onMessage' ],
 
   init: function() {
-    this.$handle = $('<div>')
+    var $handle = $('<div>')
       .addClass('handle no-select')
       .click(this.toggle);
 
     this.$messages = $('<ul>');
 
+    var $send = $('<div>')
+      .addClass('send')
+      .append(this.$username = $('<div>')
+                .addClass('username label'),
+              $('<div>').append(
+                this.$content = $('<input>')
+                  .attr('type', 'text')
+                  .keypress(this.inputKey)));
+
     this.$ = $('<div>')
       .addClass('messages headlines')
-      .append(this.$handle, this.$messages);
+      .append($handle, this.$messages, $send);
   }
 });
 

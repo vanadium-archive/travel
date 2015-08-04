@@ -2,10 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-var $ = require('../src/util/jquery');
+var Deferred = require('vanadium/src/lib/deferred');
 
 module.exports = {
   init: function(){
-    return $.Deferred().promise();
+    return new Deferred().promise;
   }
 };

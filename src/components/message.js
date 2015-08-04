@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+var format = require('date-format');
+
 var $ = require('../util/jquery');
 var defineClass = require('../util/define-class');
 
@@ -48,7 +50,31 @@ var Message = defineClass({
     },
 
     setText: function(text) {
-      this.$.text(text);
+      this.$text.text(text);
+    },
+
+    setTimestamp: function(timestamp) {
+      var fmt;
+      if (timestamp === null || timestamp === undefined) {
+        fmt = '';
+      } else {
+        fmt = format('yyyy.MM.dd.hh.mm.ss', new Date(timestamp));
+      }
+      this.$timestamp.text(fmt);
+      if (fmt) {
+        this.$label.removeClass('no-timestamp');
+      } else {
+        this.$label.addClass('no-timestamp');
+      }
+    },
+
+    setSender: function(sender) {
+      this.$sender.text(sender);
+      if (sender) {
+        this.$label.removeClass('no-sender');
+      } else {
+        this.$label.addClass('no-sender');
+      }
     },
 
     set: function(message) {
@@ -64,6 +90,8 @@ var Message = defineClass({
       var self = this;
 
       this.setType(message.type);
+      this.setSender(message.sender);
+      this.setTimestamp(message.timestamp);
       this.setText(message.text);
 
       if (message.promise) {
@@ -87,7 +115,12 @@ var Message = defineClass({
   },
 
   init: function(initial) {
-    this.$ = $('<li>');
+    this.$ = $('<li>')
+      .append(
+        this.$label = $('<span>').addClass('label').append(
+          this.$sender = $('<span>').addClass('username'),
+          this.$timestamp = $('<span>').addClass('timestamp')),
+        this.$text = $('<span>').addClass('text'));
     if (initial) {
       this.set(initial);
     }

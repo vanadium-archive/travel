@@ -18,12 +18,17 @@ var Timeline = defineClass({
       this.addButton.enable();
     },
 
-    append: function() {
+    add: function(i) {
       var controls = this.controls;
 
       var destinationSearch = new DestinationSearch(this.maps);
-      this.$destContainer.append(destinationSearch.$);
-      controls.push(destinationSearch);
+      if (i === undefined || i === controls.length) {
+        this.$destContainer.append(destinationSearch.$);
+        controls.push(destinationSearch);
+      } else {
+        destinationSearch.$.insertBefore(this.$destContainer.children()[i]);
+        controls.splice(i, 0, destinationSearch);
+      }
 
       return destinationSearch;
     },
@@ -39,11 +44,17 @@ var Timeline = defineClass({
     },
 
     remove: function(i) {
+      var removed;
       if (i >= 0) {
-        this.controls.splice(i, 1)[0].$.remove();
+        removed = this.controls.splice(i, 1)[0];
       } else if (i < 0) {
-        this.controls.splice(this.controls.length + i, 1)[0].$.remove();
+        removed = this.controls.splice(this.controls.length + i, 1)[0];
       }
+
+      if (removed) {
+        removed.$.remove();
+      }
+      return removed;
     }
   },
 

@@ -4,14 +4,14 @@
 
 var test = require('tape');
 
-var Map = require('../../src/components/map');
+var MapWidget = require('../../src/components/map-widget');
 var mockMaps = require('../../mocks/google-maps');
 
 test('instantiation', function(t) {
   t.doesNotThrow(function() {
     //instantiation smoke test
     /* jshint -W031 */
-    new Map({
+    new MapWidget({
       maps: mockMaps
     });
     /* jshint +W031 */

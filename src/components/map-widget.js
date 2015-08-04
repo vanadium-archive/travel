@@ -2,10 +2,11 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+require('es6-shim');
+
 var $ = require('../util/jquery');
 var defineClass = require('../util/define-class');
 
-var Destinations = require('../destinations');
 var Place = require('../place');
 var DestinationInfo = require('./destination-info');
 var DestinationMarker = require('./destination-marker');
@@ -15,7 +16,7 @@ var describeDestination = require('../describe-destination');
 //named destination marker clients
 var SEARCH_CLIENT = 'search';
 
-var Map = defineClass({
+var MapWidget = defineClass({
   publics: {
     getBounds: function() {
       return this.map.getBounds();
@@ -28,31 +29,18 @@ var Map = defineClass({
       });
     },
 
-    addDestination: function(index) {
-      var self = this;
+    bindDestinations: function(destinations) {
+      if (this.destinations) {
+        this.destinations.onAdd.remove(this.handleDestinationAdd);
+        this.destinations.onRemove.remove(this.handleDestinationRemove);
+      }
 
-      var destination = this.destinations.add(index);
+      this.destinations = destinations;
 
-      destination.onPlaceChange.add(function(place) {
-        self.handleDestinationPlaceChange(destination, place);
-      });
-      destination.onDeselect.add(function() {
-        self.handleDestinationDeselect(destination);
-      });
-      destination.onSelect.add(function() {
-        self.handleDestinationSelect(destination);
-      });
-
-      return destination;
-    },
-
-    getDestination: function(index) {
-      return this.destinations.get(index);
-    },
-
-    removeDestination: function(index) {
-      //TODO(rosswang): clear any rendered legs
-      return this.destinations.remove(index);
+      if (destinations) {
+        destinations.onAdd.add(this.handleDestinationAdd);
+        destinations.onRemove.add(this.handleDestinationRemove);
+      }
     },
 
     getSelectedDestination: function() {
@@ -123,6 +111,10 @@ var Map = defineClass({
       this.locationSelectionEnabled = false;
     },
 
+    createPlacesService: function() {
+      return new this.maps.places.PlacesService(this.map);
+    },
+
     showSearchResults: function(results) {
       var self = this;
 
@@ -139,12 +131,11 @@ var Map = defineClass({
          * click and a normal search so that we don't overwrite the search box
          * text for the autocomplete click.*/
         dest.setPlace(new Place(results[0]));
-        self.createDestinationMarker(dest);
       } else if (results.length > 0) {
         $.each(results, function(i, result) {
           var place = new Place(result);
 
-          var marker = self.createMarker(place, SEARCH_CLIENT,
+          var marker = self.getOrCreateMarker(place, SEARCH_CLIENT,
             DestinationMarker.color.RED);
           self.searchMarkers.push(marker);
 
@@ -152,7 +143,6 @@ var Map = defineClass({
             var dest = self.selectedDestination;
             if (dest) {
               dest.setPlace(place);
-              self.associateDestinationMarker(dest, marker);
             }
           }));
         });
@@ -161,41 +151,94 @@ var Map = defineClass({
   },
 
   privates: {
-    createMarker: function(place, client, color) {
+    handleDestinationAdd: function(destination) {
       var self = this;
 
-      var marker = new DestinationMarker(this.maps, this.map, place,
-        client, color);
+      this.destMeta.set(destination, {});
 
-      if (place.hasDetails()) {
-        marker.onClick.add(function() {
-          self.showDestinationInfo(marker);
-        }, true);
+      destination.onPlaceChange.add(function(place) {
+        self.handleDestinationPlaceChange(destination, place);
+      });
+      destination.onDeselect.add(function() {
+        self.handleDestinationDeselect(destination);
+      });
+      destination.onSelect.add(function() {
+        self.handleDestinationSelect(destination);
+      });
+
+      if (destination.hasNext()) {
+        this.updateLeg(destination.getNext());
+      }
+
+      return destination;
+    },
+
+    handleDestinationRemove: function(destination) {
+      var meta = this.destMeta.get(destination);
+
+      if (meta.unbindMarker) {
+        meta.unbindMarker();
+      }
+
+      if (meta.leg) {
+        meta.leg.clear();
+      }
+
+      var next = this.destinations.get(destination.getIndex());
+      if (next) {
+        this.updateLeg(next);
+      }
+
+      destination.deselect();
+
+      this.destMeta.delete(destination);
+    },
+
+    getOrCreateMarker: function(place, client, color, mergePredicate) {
+      var self = this;
+
+      var key = place.toKey();
+
+      var marker = this.markers[key];
+      if (marker) {
+        if (!mergePredicate || mergePredicate(marker)) {
+          marker.pushClient(client, color);
+        } else {
+          marker = null;
+        }
+      } else {
+        marker = new DestinationMarker(this.maps, this.map, place,
+          client, color);
+
+        if (place.hasDetails()) {
+          marker.onClick.add(function() {
+            self.showDestinationInfo(marker);
+          }, true);
+        }
+
+        this.markers[key] = marker;
+        marker.onClear.add(function() {
+          delete self.markers[key];
+        });
       }
 
       return marker;
     },
 
-    createDestinationMarker: function(destination) {
-      var marker = this.createMarker(destination.getPlace(), destination,
-        this.getAppropriateDestinationMarkerColor(destination));
-
-      this.bindDestinationMarker(destination, marker);
-
-      return marker;
-    },
-
-    associateDestinationMarker: function(destination, marker) {
-      if (!marker.onClick.has(destination.select)) {
-        marker.pushClient(destination,
-          this.getAppropriateDestinationMarkerColor(destination));
-
-        this.bindDestinationMarker(destination, marker);
-      }
-    },
-
-    bindDestinationMarker: function(destination, marker) {
+    bindDestinationMarker: function(destination) {
       var self = this;
+
+      var place = destination.getPlace();
+
+      var marker = this.getOrCreateMarker(place, destination,
+        this.getAppropriateDestinationMarkerColor(destination),
+        function(marker) {
+          return !marker.hasClient(destination);
+        });
+
+      if (!marker) {
+        return;
+      }
 
       marker.onClick.add(destination.select);
       function handleSelection() {
@@ -211,13 +254,26 @@ var Map = defineClass({
       destination.onOrdinalChange.add(handleOrdinalChange);
       handleOrdinalChange();
 
-      function handlePlaceChange() {
+      var meta = this.destMeta.get(destination);
+
+      function unbind() {
         marker.removeClient(destination);
         marker.onClick.remove(destination.select);
         destination.onSelect.remove(handleSelection);
         destination.onDeselect.remove(handleSelection);
         destination.onOrdinalChange.remove(handleOrdinalChange);
         destination.onPlaceChange.remove(handlePlaceChange);
+        if (meta.unbindMarker === unbind) {
+          delete meta.unbindMarker;
+        }
+      }
+
+      meta.unbindMarker = unbind;
+
+      function handlePlaceChange(newPlace) {
+        if ((place && place.toKey()) !== (newPlace && newPlace.toKey())) {
+          unbind();
+        }
       }
 
       destination.onPlaceChange.add(handlePlaceChange);
@@ -240,6 +296,10 @@ var Map = defineClass({
     },
 
     handleDestinationPlaceChange: function(destination, place) {
+      if (place) {
+        this.bindDestinationMarker(destination);
+      }
+
       if (destination.getPrevious()) {
         this.updateLeg(destination);
       }
@@ -280,19 +340,26 @@ var Map = defineClass({
       var a = destination.getPrevious().getPlace();
       var b = destination.getPlace();
 
-      var leg = destination.leg;
+      var meta = this.destMeta.get(destination);
+
+      var leg = meta.leg;
       if (leg) {
         if (leg.async) {
           leg.async.reject();
         }
-        // setMap(null) seems to be the best way to clear the nav route
-        leg.renderer.setMap(null);
+        leg.clear();
       } else {
         var renderer = new maps.DirectionsRenderer({
           preserveViewport: true,
           suppressMarkers: true
         });
-        destination.leg = leg = { renderer: renderer };
+        meta.leg = leg = {
+          renderer: renderer,
+          clear: function() {
+            // setMap(null) seems to be the best way to clear the nav route
+            renderer.setMap(null);
+          }
+        };
       }
 
       if (a && b) {
@@ -317,11 +384,6 @@ var Map = defineClass({
         leg.async.done(function(result) {
           leg.renderer.setDirections(result);
           leg.renderer.setMap(map);
-
-          self.ensureGeomsVisible(result.routes[0]['overview_path'].map(
-            function(point) {
-              return { location: point };
-            }));
         });
       }
     },
@@ -344,7 +406,6 @@ var Map = defineClass({
               if (status === maps.GeocoderStatus.OK &&
                   origin && !origin.hasPlace()) {
                 origin.setPlace(new Place(results[0]));
-                self.createDestinationMarker(origin);
               }
             });
           });
@@ -399,7 +460,6 @@ var Map = defineClass({
             function(results, status) {
               if (status === maps.GeocoderStatus.OK) {
                 dest.setPlace(new Place(results[0]));
-                self.createDestinationMarker(dest);
 
                 /* If we've just picked a location like this, we probably don't
                  * care about search results anymore. */
@@ -438,11 +498,12 @@ var Map = defineClass({
     this.navigator = opts.navigator || global.navigator;
     this.geocoder = new maps.Geocoder();
     this.directionsService = new maps.DirectionsService();
-    this.destinations = new Destinations();
 
     this.$ = $('<div>').addClass('map-canvas');
 
     this.searchMarkers = [];
+    this.markers = {};
+    this.destMeta = new Map();
 
     this.initialConfig = {
       center: new maps.LatLng(37.4184, -122.0880), //Googleplex
@@ -463,4 +524,4 @@ var Map = defineClass({
   }
 });
 
-module.exports = Map;
+module.exports = MapWidget;

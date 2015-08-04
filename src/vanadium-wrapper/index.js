@@ -7,15 +7,74 @@ var defineClass = require('../util/define-class');
 
 var SyncbaseWrapper = require('./syncbase-wrapper');
 
+var NAME_TTL = 5000;
+var NAME_REFRESH = 2500;
+
 var VanadiumWrapper = defineClass({
-  init: function(runtime) {
-    this.runtime = runtime;
-    runtime.on('crash', this.onCrash);
+  statics: {
+    multiMount: {
+      ADD: 0,
+      REPLACE: 1,
+      /**
+       * TODO(rosswang): This mode is not perfect/not entirely supported and is
+       * a hack to allow somewhat deterministic syncbase admin mounting before
+       * mount tables can spin up their own instances.
+       */
+      FAIL: 2
+    }
   },
 
   publics: {
     getAccountName: function() {
       return this.runtime.accountName;
+    },
+
+    mount: function(name, server, multiMount) {
+      var self = this;
+
+      multiMount = multiMount || this.multiMount.ADD;
+
+      function refreshName() {
+        var p;
+
+        var context = self.runtime.getContext();
+        var namespace = self.runtime.namespace();
+
+        function mount(replaceMount) {
+          return namespace.mount(context, name, server, NAME_TTL, replaceMount);
+        }
+
+        if (multiMount === self.multiMount.FAIL) {
+          /* TODO(rosswang): of course this isn't perfect; this is a hack to be
+           * removed once we no longer need to mount an admin syncbase
+           * instance. */
+
+
+          p = namespace.resolve(context, name)
+            .then(function(addresses) {
+              if (addresses[0] === server) {
+                return mount(true);
+              }
+            }, function(err) {
+              if (err.id === 'v.io/v23/naming.nameDoesntExist') {
+                return mount(true);
+              } else {
+                throw err;
+              }
+            });
+        } else {
+          p = mount(multiMount === self.multiMount.REPLACE);
+        }
+
+        p.catch(self.onError);
+
+        /* TODO(rosswang): should refresh intervals start here after initiation
+         * or after ack? */
+        setTimeout(refreshName, NAME_REFRESH);
+
+        return p;
+      }
+      return refreshName();
     },
 
     /**
@@ -45,11 +104,19 @@ var VanadiumWrapper = defineClass({
   },
 
   events: {
-    onCrash: 'memory'
+    onCrash: 'memory',
+    onError: 'memory'
+  },
+
+  init: function(runtime) {
+    this.runtime = runtime;
+    runtime.on('crash', this.onCrash);
   }
 });
 
 module.exports = {
+  multiMount: VanadiumWrapper.multiMount,
+
   /**
    * @param vanadium optional vanadium override
    * @returns a promise resolving to a VanadiumWrapper or rejecting with an
