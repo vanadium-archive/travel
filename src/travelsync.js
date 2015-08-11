@@ -13,6 +13,8 @@ var $ = require('./util/jquery');
 var defineClass = require('./util/define-class');
 
 var debug = require('./debug');
+var SyncgroupManager = require('./syncgroup-manager');
+var InvitationManager = require('./invitation-manager');
 var Place = require('./place');
 
 var vdlTravel = require('../ifc');
@@ -236,7 +238,7 @@ var TravelSync = defineClass({
       });
     },
 
-    /* A note on these operations: SyncBase client operations occur
+    /* A note on these operations: Syncbase client operations occur
      * asynchronously, in response to events that can rapidly change state. As
      * such, each write operation must first check to ensure the record it's
      * updating for is still valid (has a defined id).
@@ -382,62 +384,70 @@ var TravelSync = defineClass({
       this.processDestinations(data.destinations);
     },
 
-    start: function(args) {
+    serve: function(args) {
       var self = this;
-
+      var mountNames = args.mountNames;
       var vanadiumWrapper = args.vanadiumWrapper;
-      var identity = args.identity;
+
+      this.status.rpc = 'starting';
+      return vanadiumWrapper.server(
+          vanadium.naming.join(mountNames.device, 'rpc'), this.server)
+        .then(function(server) {
+          self.status.rpc = 'ready';
+          return server;
+        }, function(err) {
+          self.status.rpc = 'failed';
+          throw err;
+        });
+    },
+
+    connectSyncbase: function(args) {
+      var self = this;
+      var vanadiumWrapper = args.vanadiumWrapper;
 
       var sbName = queryString.parse(location.search).syncbase || 4000;
       if ($.isNumeric(sbName)) {
         sbName = '/localhost:' + sbName;
       }
 
-      var startSyncbase = vanadiumWrapper
+      this.status.syncbase = 'starting';
+      return vanadiumWrapper
         .syncbase(sbName)
         .then(function(syncbase) {
           syncbase.onError.add(self.onError);
           syncbase.onUpdate.add(self.processUpdates);
-
-          /* TODO(rosswang): Once Vanadium supports global sync-group admin
-           * creation, remove this. For now, use the first local SyncBase
-           * instance to administrate. */
-          var sgAdmin = vanadium.naming.join(
-            identity.mountNames.user, 'sgadmin');
-          return vanadiumWrapper.mount(sgAdmin, sbName,
-              vanadiumWrapper.multiMount.FAIL)
-            .then(function() {
-              var sg = syncbase.syncGroup(sgAdmin, 'trip');
-
-              var spec = sg.buildSpec(
-                [''],
-                [vanadium.naming.join(identity.mountNames.user, 'sgmt')]
-              );
-
-              /* TODO(rosswang): Right now, duplicate SyncBase creates on
-               * different SyncBase instances results in siloed SyncGroups.
-               * Revisit this logic once it merges properly. */
-              return sg.joinOrCreate(spec);
-            })
-            .then(function() {
-              return syncbase;
-            });
+          self.status.syncbase = 'ready';
+          return syncbase;
+        }, function(err) {
+          self.status.syncbase = 'failed';
+          throw err;
         });
+    },
 
-      return Promise.all([
-        vanadiumWrapper.server(
-          vanadium.naming.join(identity.mountNames.device, 'rpc'), this.server),
-        startSyncbase
-      ]).then(function(values) {
-        return {
-          server: values[0],
-          syncbase: values[1]
-        };
-      });
+    createSyncgroupManager: function(args, syncbase) {
+      var gm = new SyncgroupManager(args.identity, args.vanadiumWrapper,
+        syncbase, args.mountNames);
+      gm.onError.add(this.onError);
+
+      return gm;
+    },
+
+    createPrimarySyncGroup: function(groupManager) {
+      var self = this;
+
+      this.status.tripSyncGroup = 'creating';
+      return groupManager.createSyncGroup('trip', [''])
+        .then(function(sg) {
+          self.status.tripSyncGroup = 'created';
+          return sg;
+        }, function(err) {
+          self.status.tripSyncGroup = 'failed';
+          throw err;
+        });
     }
   },
 
-  constants: [ 'startup' ],
+  constants: [ 'invitationManager', 'startup', 'status' ],
   events: {
     /**
      * @param newSize
@@ -461,12 +471,13 @@ var TravelSync = defineClass({
   },
 
   /**
-   * @param promise a promise that produces { mountName, vanadiumWrapper }.
+   * @param prereqs a promise that produces { identity, mountNames,
+   *  vanadiumWrapper }.
    * @mapsDependencies an object with the following keys:
    *  maps
    *  placesService
    */
-  init: function(promise, mapsDependencies) {
+  init: function(prereqs, mapsDependencies) {
     var self = this;
 
     this.mapsDeps = mapsDependencies;
@@ -474,9 +485,35 @@ var TravelSync = defineClass({
     this.tripStatus = {};
     this.messages = {};
     this.destRecords = [];
+    this.status = {};
 
     this.server = new vdlTravel.TravelSync();
-    this.startup = promise.then(this.start);
+    var startRpc = prereqs.then(this.serve);
+    var startSyncbase = prereqs.then(this.connectSyncbase);
+    var startSyncgroupManager = Promise
+      .all([prereqs, startSyncbase])
+      .then(function(args) {
+        return self.createSyncgroupManager(args[0], args[1]);
+      });
+    var createPrimarySyncGroup = startSyncgroupManager
+      .then(this.createPrimarySyncGroup);
+
+    this.startup = Promise.all([
+        startRpc,
+        startSyncbase,
+        startSyncgroupManager,
+        createPrimarySyncGroup
+      ]).then(function(values) {
+        return {
+          server: values[0],
+          syncbase: values[1],
+          groupManager: values[2]
+        };
+      });
+
+    this.invitationManager = new InvitationManager(prereqs,
+      startSyncgroupManager);
+    this.invitationManager.onError.add(this.onError);
 
     this.handleDestinationPlaceChange = function() {
       self.updateDestinationPlace(this);

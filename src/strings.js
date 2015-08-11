@@ -2,6 +2,24 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+var htmlEncode = require('htmlencode').htmlEncode;
+
+function text(plainText) {
+  return htmlEncode(plainText);
+}
+
+function link(name, linkText) {
+  return '<a name="' + name + '" href="#">' + text(linkText) + '</a>';
+}
+
+function pre(preText) {
+  return '<pre>' + preText + '</pre>';
+}
+
+function ownerOfTrip(sender, owner) {
+  return sender === owner? 'a' : owner + '\'s';
+}
+
 function getStrings(locale) {
   return {
     'Add destination': 'Add destination',
@@ -29,8 +47,36 @@ function getStrings(locale) {
     label: function(label, details) {
       return label + ': ' + details;
     },
+    invitationAccepted: function(sender, owner) {
+      return 'Accepted invite from ' + sender + ' to join ' +
+        ownerOfTrip(sender, owner) + ' trip.';
+    },
+    invitationDeclined: function(sender, owner) {
+      return 'Declined invite from ' + sender + ' to join ' +
+        ownerOfTrip(sender, owner) + ' trip.';
+    },
+    invitationReceived: function(sender, owner) {
+      return text(sender + ' has invited you to join ' +
+        ownerOfTrip(sender, owner) + ' trip. ') +
+        link('accept', 'Accept') + text(' / ') + link('decline', 'Decline');
+    },
+    invitationSent: function(recipient, sender) {
+      return sender?
+        sender + ' invited ' + recipient + ' to join the trip.' :
+        'Invited ' + recipient + ' to join the trip.';
+    },
+    'Not connected': 'Not connected',
+    notReachable: function(username) {
+      return username + ' is not reachable or is not a Travel Planner user.';
+    },
     'Origin': 'Origin',
     'Search': 'Search',
+    sendingInvite: function(username) {
+      return 'Inviting ' + username + ' to join the trip...';
+    },
+    status: function(status) {
+      return text('Status: ') + pre(status);
+    },
     'Timeline': 'Timeline',
     'Travel Planner': 'Travel Planner',
     'Unknown error': 'Unknown error'

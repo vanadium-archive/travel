@@ -136,7 +136,7 @@ var MapWidget = defineClass({
           var place = new Place(result);
 
           var marker = self.getOrCreateMarker(place, SEARCH_CLIENT,
-            DestinationMarker.color.RED);
+            DestinationMarker.color.RED, null, false);
           self.searchMarkers.push(marker);
 
           marker.onClick.add(marker.restrictListenerToClient(function() {
@@ -145,6 +145,8 @@ var MapWidget = defineClass({
               dest.setPlace(place);
             }
           }));
+
+          marker.deprioritizeClient();
         });
       }
     }
@@ -194,7 +196,7 @@ var MapWidget = defineClass({
       this.destMeta.delete(destination);
     },
 
-    getOrCreateMarker: function(place, client, color, mergePredicate) {
+    getOrCreateMarker: function(place, client, color, mergePredicate, update) {
       var self = this;
 
       var key = place.toKey();
@@ -202,7 +204,7 @@ var MapWidget = defineClass({
       var marker = this.markers[key];
       if (marker) {
         if (!mergePredicate || mergePredicate(marker)) {
-          marker.pushClient(client, color);
+          marker.pushClient(client, color, update);
         } else {
           marker = null;
         }

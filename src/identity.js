@@ -7,7 +7,10 @@ var uuid = require('uuid');
 module.exports = Identity;
 
 function Identity(accountName) {
-  this.username = extractUsername(accountName);
+  var account = processAccountName(accountName);
+
+  this.account = account.name;
+  this.username = account.username;
   this.deviceType = 'desktop';
   this.deviceId = uuid.v4();
 
@@ -19,15 +22,22 @@ function autoUsername() {
   return uuid.v4();
 }
 
-function extractUsername(accountName) {
+var ACCOUNT_REGEX = /(dev\.v\.io\/u\/([^\/]+)).*/;
+
+function processAccountName(accountName) {
   if (!accountName || accountName === 'unknown') {
-    return autoUsername();
+    return {
+      name: '...',
+      username: autoUsername()
+    };
   }
 
-  var parts = accountName.split('/');
-  if (parts[0] !== 'dev.v.io' || parts[1] !== 'u') {
-    return accountName;
-  }
-
-  return parts[2];
+  var match = ACCOUNT_REGEX.exec(accountName);
+  return match? {
+    name: match[1],
+    username: match[2]
+  } : {
+    name: accountName,
+    username: accountName
+  };
 }

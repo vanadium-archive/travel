@@ -85,7 +85,7 @@ var SyncbaseWrapper = defineClass({
       var db = app.noSqlDatabase('db');
 
       return setUp(context, app, db).then(function() {
-        return new SyncbaseWrapper(context, db);
+        return new SyncbaseWrapper(context, db, mountName);
       });
     }
   },
@@ -341,16 +341,21 @@ var SyncbaseWrapper = defineClass({
     }
   },
 
+  constants: [ 'mountName' ],
+
   events: {
     onError: 'memory',
     onUpdate: 'memory'
   },
 
-  init: function(context, db) {
+  init: function(context, db, mountName) {
+    // TODO(rosswang): mountName probably won't be necessary after SyncGroup
+    // admin instances are hosted (see group-manager).
     var self = this;
     this.context = context;
     this.db = db;
     this.t = db.table('t');
+    this.mountName = mountName;
 
     this.writes = new Set();
 

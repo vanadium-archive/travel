@@ -25,14 +25,17 @@ kill_child_processes() {
   fi
 }
 main() {
+  PATH=${PATH}:${V23_ROOT}/release/go/bin
   local -r TMP=tmp
+  local -r CREDS=./tmp/creds/${creds-}
   local -r PORT=${port-4000}
   local -r MOUNTTABLED_ADDR=":$((PORT+1))"
   local -r SYNCBASED_ADDR=":$((PORT))"
+  local -r BLESSINGS=`principal dump --v23.credentials=${CREDS} -s=true`
   mkdir -p $TMP
-  ${V23_ROOT}/release/go/bin/mounttabled \
+  mounttabled \
     --v23.tcp.address=${MOUNTTABLED_ADDR} \
-    --v23.credentials=${TMP}/creds &
+    --v23.credentials=${CREDS} &
   ./bin/syncbased \
     --v=5 \
     --alsologtostderr=false \
@@ -40,8 +43,8 @@ main() {
     --name=syncbase \
     --v23.namespace.root=/${MOUNTTABLED_ADDR} \
     --v23.tcp.address=${SYNCBASED_ADDR} \
-    --v23.credentials=${TMP}/creds \
-    --v23.permissions.literal='{"Admin":{"In":["..."]},"Write":{"In":["..."]},"Read":{"In":["..."]},"Resolve":{"In":["..."]},"Debug":{"In":["..."]}}'
+    --v23.credentials=${CREDS} \
+    --v23.permissions.literal="{\"Admin\":{\"In\":[\"${BLESSINGS}\"]},\"Write\":{\"In\":[\"${BLESSINGS}\"]},\"Read\":{\"In\":[\"${BLESSINGS}\"]},\"Resolve\":{\"In\":[\"${BLESSINGS}\"]},\"Debug\":{\"In\":[\"...\"]}}"
   tail -f /dev/null  # wait forever
 }
 main "$@"

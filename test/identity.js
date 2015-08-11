@@ -6,23 +6,24 @@ var test = require('tape');
 
 var Identity = require('../src/identity');
 
-function verifyAutoAccountName(t, n) {
-  t.assert(n.length > 1, 'auto-generated username is nontrivial');
+function verifyAutoAccount(t, i) {
+  t.equals(i.account, '...', 'unknown account defaults to open');
+  t.assert(i.username.length > 1, 'auto-generated username is nontrivial');
 }
 
 test('auto-generated username from unknown', function(t) {
-  var a = new Identity('unknown').username,
-      b = new Identity('unknown').username;
-  verifyAutoAccountName(t, a);
-  verifyAutoAccountName(t, b);
-  t.notEqual(b, a, 'auto-generated username is unique');
+  var a = new Identity('unknown'),
+      b = new Identity('unknown');
+  verifyAutoAccount(t, a);
+  verifyAutoAccount(t, b);
+  t.notEqual(b.username, a.username, 'auto-generated username is unique');
   t.end();
 });
 
 function testAutoExtract(t, r) {
-  var n = new Identity(r).username;
-  verifyAutoAccountName(t, n);
-  t.not(n, r);
+  var i = new Identity(r);
+  verifyAutoAccount(t, i);
+  t.not(i.username, r);
   t.end();
 }
 
@@ -44,6 +45,8 @@ var testAccountName = 'dev.v.io/u/joeuser@google.com/chrome';
 
 test('init', function(t) {
   var i = new Identity(testAccountName);
+  t.equals(i.account, 'dev.v.io/u/joeuser@google.com',
+    'should generalize a dev.v.io account name');
   t.equals(i.username, 'joeuser@google.com',
     'should extract a username from a dev.v.io account name');
   var expectedPrefix = 'joeuser@google.com/desktop_';

@@ -77,6 +77,16 @@ var VanadiumWrapper = defineClass({
       return refreshName();
     },
 
+    getPermissions: function(name) {
+      return this.runtime.namespace().getPermissions(
+        this.runtime.getContext(), name);
+    },
+
+    setPermissions: function(name, perms) {
+      return this.runtime.namespace().setPermissions(
+        this.runtime.getContext(), name, perms);
+    },
+
     /**
      * @param endpoint Vanadium name
      * @returns a promise resolving to a client or rejecting with an error.

@@ -68,7 +68,7 @@ bootstrap: creds syncbase
 
 .PHONY: creds
 creds:
-	@principal seekblessings --v23.credentials tmp/creds
+	@principal seekblessings --v23.credentials tmp/creds/$(creds)
 
 .PHONY: syncbase
 syncbase: bin

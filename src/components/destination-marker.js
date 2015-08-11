@@ -41,12 +41,28 @@ var DestinationMarker = defineClass({
       this.onClear();
     },
 
-    pushClient: function(client, color) {
+    pushClient: function(client, color, update) {
       this.clients.push($.extend({}, this.topClient(), {
         client: client,
         color: color,
         listeners: []
       }));
+      if (update !== false) { //undefined => true
+        this.updateIcon();
+        this.updateTitle();
+      }
+    },
+
+    /**
+     * Flip the top two clients, to deprioritize a low-priority client that was
+     * just pushed.
+     */
+    deprioritizeClient: function() {
+      if (this.clients.length > 1) {
+        var demoted = this.topClient();
+        this.clients.splice(--this.clients.length - 1, 0, demoted);
+      }
+
       this.updateIcon();
       this.updateTitle();
     },

@@ -125,6 +125,7 @@ var DestinationSearch = defineClass({
       if (e.which === 13) {
         this.onSubmit(this.getValue());
       }
+      e.stopPropagation();
     }
   },
 

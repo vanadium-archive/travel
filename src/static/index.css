@@ -151,6 +151,12 @@ body {
   margin-top: 3px;
 }
 
+.messages.headlines a {
+  background-color: rgba(255, 255, 255, .8);
+  border-radius: 2px;
+  padding: 1px 3px;
+}
+
 .messages.headlines li.history {
   display: none;
 }

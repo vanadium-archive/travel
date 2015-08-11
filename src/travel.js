@@ -2,8 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+require('es6-shim');
+
 var raf = require('raf');
-var vanadium = require('vanadium');
 
 var $ = require('./util/jquery');
 var defineClass = require('./util/define-class');
@@ -21,8 +22,9 @@ var TravelSync = require('./travelsync');
 
 var vanadiumWrapperDefault = require('./vanadium-wrapper');
 
-var strings = require('./strings').currentLocale;
 var describeDestination = require('./describe-destination');
+var naming = require('./naming');
+var strings = require('./strings').currentLocale;
 
 function bindControlToDestination(control, destination) {
   function updateOrdinal() {
@@ -71,18 +73,7 @@ function handleDestinationOrdinalUpdate(control, destination) {
   control.setPlaceholder(describeDestination.descriptionOpenEnded(destination));
 }
 
-function makeMountNames(id) {
-  // TODO: first-class app-wide rather than siloed by account
-  var parts = ['/ns.dev.v.io:8101', 'users', id.username, 'travel'];
-  var names = {
-    user: vanadium.naming.join(parts)
-  };
-
-  parts.push(id.deviceName);
-  names.device = vanadium.naming.join(parts);
-
-  return names;
-}
+var CMD_REGEX = /\/(\S*)(?:\s+(.*))?/;
 
 var Travel = defineClass({
   publics: {
@@ -91,9 +82,11 @@ var Travel = defineClass({
     },
 
     info: function (info, promise) {
-      var messageData = Message.info(info);
-      messageData.promise = promise;
-      this.messages.push(messageData);
+      this.messages.push(new Message({
+        type: Message.INFO,
+        text: info,
+        promise: promise
+      }));
     }
   },
 
@@ -277,6 +270,53 @@ var Travel = defineClass({
       raf(this.trimUnusedDestinations);
     },
 
+    runCommand: function(command, rest) {
+      var handler = this.commands[command];
+      if (handler) {
+        var args = handler.parseArgs? handler.parseArgs(rest) : [rest];
+        handler.op.apply(this, args);
+      } else {
+        this.error('Unrecognized command ' + command);
+      }
+    },
+
+    handleInvite: function(owner, recipient, sender) {
+      var self = this;
+      var invitationManager = this.sync.invitationManager;
+      var me = invitationManager.getUsername();
+
+      if (recipient === me) {
+        var message = new Message();
+        message.setType(Message.INFO);
+        message.setHtml(strings.invitationReceived(sender, owner));
+        message.setPromise(new Promise(function(resolve, reject) {
+          message.$.find('a[name=accept]').click(function() {
+            invitationManager.accept(owner).then(function() {
+              return strings.invitationAccepted(sender, owner);
+            }).then(resolve, reject);
+            return false;
+          });
+          message.$.find('a[name=decline]').click(function() {
+            invitationManager.decline(owner).then(function() {
+              return strings.invitationDeclined(sender, owner);
+            }).then(resolve, reject);
+            return false;
+          });
+        }));
+
+        self.messages.push(message);
+      }
+    },
+
+    handleUserMessage: function(message, raw) {
+      var match = CMD_REGEX.exec(raw);
+      if (match) {
+        this.runCommand(match[1], match[2]);
+      } else {
+        this.sync.message(message);
+      }
+    },
+
     trimUnusedDestinations: function() {
       for (var lastControl = this.timeline.get(-1);
           !lastControl.getPlace() && !lastControl.isSelected() &&
@@ -332,11 +372,12 @@ var Travel = defineClass({
         wrapper.onCrash.add(error);
 
         var identity = new Identity(wrapper.getAccountName());
-        identity.mountNames = makeMountNames(identity);
+        var mountNames = naming.mountNames(identity);
         messages.setUsername(identity.username);
 
         return {
           identity: identity,
+          mountNames: mountNames,
           vanadiumWrapper: wrapper
         };
       });
@@ -371,9 +412,9 @@ var Travel = defineClass({
       self.messages.push.apply(self.messages, messages);
     });
 
-    messages.onMessage.add(function(message) {
-      sync.message(message);
-    });
+    sync.invitationManager.onInvite.add(this.handleInvite);
+
+    messages.onMessage.add(this.handleUserMessage);
 
     timeline.onAddClick.add(this.handleTimelineDestinationAdd);
 
@@ -447,6 +488,43 @@ var Travel = defineClass({
 
     destinations.add();
     miniDestinationSearch.focus();
+
+    $domRoot.keypress(function() {
+      messages.open();
+      /* Somehow emergent behavior types the key just hit without any further
+       * code from us. Praise be to the code gods; pray for cross-browser. */
+    });
+
+    this.commands = {
+      invite: {
+        op: function(username) {
+          this.info(strings.sendingInvite(username),
+            this.sync.invitationManager.invite(username)
+              .then(function() {
+                var me = self.sync.invitationManager.getUsername();
+                self.sync.message({
+                  type: Message.INFO,
+                  text: strings.invitationSent(username, me)
+                });
+              }, function(err) {
+                if (err.id === 'v.io/v23/verror.NoServers') {
+                  throw strings.notReachable(username);
+                } else {
+                  throw err;
+                }
+              }));
+        }
+      },
+
+      status: {
+        op: function() {
+          this.messages.push(new Message({
+            type: Message.INFO,
+            html: strings.status(JSON.stringify(this.sync.status, null, 2))
+          }));
+        }
+      }
+    };
   }
 });
 

@@ -53,7 +53,13 @@ var Message = defineClass({
       this.$text.text(text);
     },
 
+    setHtml: function(html) {
+      this.$text.html(html);
+    },
+
     setTimestamp: function(timestamp) {
+      this.timestamp = timestamp;
+
       var fmt;
       if (timestamp === null || timestamp === undefined) {
         fmt = '';
@@ -68,6 +74,10 @@ var Message = defineClass({
       }
     },
 
+    getTimestamp: function() {
+      return this.timestamp;
+    },
+
     setSender: function(sender) {
       this.$sender.text(sender);
       if (sender) {
@@ -77,32 +87,42 @@ var Message = defineClass({
       }
     },
 
-    set: function(message) {
-      if (!message) {
-        this.onLowerPriority();
-        return;
-      }
-
-      if (typeof message === 'string') {
-        message = Message.info(message);
-      }
-
+    setPromise: function(promise) {
       var self = this;
-
-      this.setType(message.type);
-      this.setSender(message.sender);
-      this.setTimestamp(message.timestamp);
-      this.setText(message.text);
-
-      if (message.promise) {
-        message.promise.then(function(message) {
-          self.set(message);
+      if (promise) {
+        promise.then(function(obj) {
+          self.set(obj);
         }, function(err) {
           self.set(Message.error(err));
         });
       } else {
         this.onLowerPriority();
       }
+    },
+
+    set: function(obj) {
+      if (!obj) {
+        this.onLowerPriority();
+        return;
+      }
+
+      if (typeof obj === 'string') {
+        obj = {
+          type: Message.INFO,
+          text: obj
+        };
+      }
+
+      this.setType(obj.type);
+      this.setSender(obj.sender);
+      this.setTimestamp(obj.timestamp);
+      if (obj.text) {
+        this.setText(obj.text);
+      } else {
+        this.setHtml(obj.html);
+      }
+
+      this.setPromise(obj.promise);
     }
   },
 
@@ -117,9 +137,11 @@ var Message = defineClass({
   init: function(initial) {
     this.$ = $('<li>')
       .append(
-        this.$label = $('<span>').addClass('label').append(
-          this.$sender = $('<span>').addClass('username'),
-          this.$timestamp = $('<span>').addClass('timestamp')),
+        this.$label = $('<span>')
+          .addClass('label no-sender no-timestamp')
+          .append(
+            this.$sender = $('<span>').addClass('username'),
+            this.$timestamp = $('<span>').addClass('timestamp')),
         this.$text = $('<span>').addClass('text'));
     if (initial) {
       this.set(initial);

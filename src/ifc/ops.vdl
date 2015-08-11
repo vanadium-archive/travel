@@ -10,7 +10,7 @@ const (
   Collaborate = "C"
 )
 
-// Stub multicast RPCs to mock SyncBase storage.
+// Stub multicast RPCs to mock Syncbase storage.
 // TODO: allow multiple trips (e.g. multiple planned trips).
 type TravelSync interface {
   // Gets the current trip.
