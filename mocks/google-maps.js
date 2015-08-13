@@ -6,9 +6,10 @@ var $ = require('../src/util/jquery');
 var defineClass = require('../src/util/define-class');
 
 var ControlPosition = {
+  LEFT_CENTER: 'lc',
   LEFT_TOP: 'lt',
-  TOP_LEFT: 'tl',
-  TOP_CENTER: 'tc'
+  TOP_CENTER: 'tc',
+  TOP_LEFT: 'tl'
 };
 
 var ControlPanel = defineClass({
@@ -68,10 +69,11 @@ var Map = defineClass({
   },
 
   init: function(canvas) {
+    var self = this;
     this.controls = {};
-    this.controls[ControlPosition.LEFT_TOP] = new ControlPanel(canvas);
-    this.controls[ControlPosition.TOP_CENTER] = new ControlPanel(canvas);
-    this.controls[ControlPosition.TOP_LEFT] = new ControlPanel(canvas);
+    $.each(ControlPosition, function() {
+      self.controls[this] = new ControlPanel(canvas);
+    });
 
     this.infoWindows = [];
   }

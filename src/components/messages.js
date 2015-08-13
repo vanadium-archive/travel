@@ -148,16 +148,14 @@ var Messages = defineClass({
 
   init: function() {
     this.$handle = $('<div>')
-      .addClass('handle')
+      .addClass('handle no-select')
       .click(this.toggle);
 
     this.$messages = $('<ul>');
 
     this.$ = $('<div>')
-      .addClass('messages')
-      .addClass('headlines')
-      .append(this.$handle)
-      .append(this.$messages);
+      .addClass('messages headlines')
+      .append(this.$handle, this.$messages);
   }
 });
 

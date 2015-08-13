@@ -72,6 +72,10 @@ var DestinationMarker = defineClass({
       }
     },
 
+    getClient: function() {
+      return this.topClient().client;
+    },
+
     setColor: function(color) {
       this.topClient().color = color;
       this.updateIcon();
@@ -87,6 +91,16 @@ var DestinationMarker = defineClass({
       client.label = label;
       client.icon = null;
       this.updateIcon();
+    },
+
+    restrictListenerToClient: function(callback, client) {
+      var self = this;
+      client = client || this.getClient();
+      return function() {
+        if (self.getClient() === client) {
+          return callback.apply(this, arguments);
+        }
+      };
     },
 
     setIcon: function(icon) {
@@ -155,6 +169,11 @@ var DestinationMarker = defineClass({
       clickable: false
     });
 
+    /* Override onClick.add to keep a record of which listeners are bound to
+     * which clients to remove listeners on client removal. This does not
+     * however implicitly restrict such listeners; that must be left to the
+     * caller so as to allow the caller to later pre-emptively remove the
+     * listener if desired. */
     defineClass.decorate(this.onClick, 'add', function(listener, global) {
       if (!global) {
         /* Per jQuery, listener can also be an array; however, there seems to
@@ -169,7 +188,7 @@ var DestinationMarker = defineClass({
           listeners.push(listener);
         }
       }
-
+    }, function() {
       self.refreshClickability();
     });
 

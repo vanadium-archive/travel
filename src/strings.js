@@ -4,6 +4,10 @@
 
 function getStrings(locale) {
   return {
+    'Add destination': 'Add destination',
+    change: function(object) {
+      return 'Change ' + object.toLowerCase();
+    },
     'Connected to all services.': 'Connected to all services.',
     'Connecting...': 'Connecting...',
     'Destination': 'Destination',
@@ -23,6 +27,8 @@ function getStrings(locale) {
       return label + ': ' + details;
     },
     'Origin': 'Origin',
+    'Search': 'Search',
+    'Timeline': 'Timeline',
     'Travel Planner': 'Travel Planner',
     'Unknown error': 'Unknown error'
   };

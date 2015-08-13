@@ -7,28 +7,47 @@ body {
   font-family: Arial, sans-serif;
 }
 
-.destinations {
-  margin: 2em 3em;
-  width: 30em;
+.add-bn {
+  border-radius: 24px;
+  box-shadow: 0 0 4px rgba(0,0,0,.14), 0 4px 8px rgba(0,0,0,.28);
+  float: right;
+  width: 48px;
+  height: 48px;
+  cursor: pointer;
+  color: white;
+  background-color: #db4437;
+  text-align: center;
+  margin-top: 12px;
+  font-size: 27px;
+  font-weight: 100;
+  transform-origin: 100% 0;
+  transition: box-shadow .15s, transform .2s .1s;
 }
 
-.add-bn {
-  border-radius: 16px;
-  border: 1px solid #aaa;
-  width: 32px;
-  height: 32px;
-  cursor: pointer;
-  color: #aaa;
-  background-color: white;
-  text-align: center;
-  margin-top: 4px;
-  font-size: 27px;
-  font-weight: lighter;
+.collapsed .add-bn {
+  transform: scaleX(0);
+  transition: transform .2s .2s;
+}
+
+.add-bn:hover {
+  box-shadow: 2px 4px 4px rgba(0,0,0,.14), 2px 8px 8px rgba(0,0,0,.28);
+  transition: box-shadow .15s;
+}
+
+.add-bn.disabled {
+  transform: scaleY(0);
+  transition: transform .2s .1s;
+  /* Delay is just to style consistently with .add-bn transition so
+   * we don't have to create a dummy parent just for the different transition.*/
+}
+
+.clear-float {
+  clear: both;
 }
 
 .destination {
-  width: 100%;
   position: relative;
+  width: 100%;
 }
 
 .destination input {
@@ -58,8 +77,12 @@ body {
   font-size: 14px;
 }
 
+.selected {
+  box-shadow: 0 0 8px #05f;
+  z-index: 1;
+}
+
 .map-canvas {
-  width: 100%;
   height: 100%;
 }
 
@@ -81,13 +104,6 @@ body {
   cursor: pointer;
   text-align: center;
   transition: background-color .2s, border-bottom .2s;
-
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  -khtml-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
 }
 
 .messages.headlines .handle {
@@ -153,7 +169,94 @@ body {
   color: red;
 }
 
-.selected {
-  box-shadow: 0 0 8px #05f;
-  z-index: 1;
+.mini-search {
+  overflow: hidden;
+  vertical-align: middle;
+  transform-origin: 0 0;
+  transition: transform .5s;
+}
+
+.mini-search.collapsed {
+  transform: translateX(-200%);
+  /* keep this in sync with js search disable delay */
+  transition: transform .5s;
+}
+
+.mini-search > * {
+  display: inline-block;
+  margin-left: 1em;
+}
+
+.mini-search .add-bn {
+  float: none;
+  margin-bottom: 12px;
+  transform-origin: 0 0;
+}
+
+.mini-search.collapsed .add-bn {
+  transform: initial;
+}
+
+.mini-search .destination {
+  width: 32em;
+}
+
+.no-select {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+.timeline {
+  padding: 1em;
+  margin: 0;
+}
+
+.timeline-container {
+  box-shadow: inset -7px 0 7px -7px gray;
+  float: left;
+  height: 100%;
+  overflow-y: auto;
+  width: 25em;
+  transition: width .5s;
+}
+
+.timeline-container.collapsed {
+  overflow: hidden;
+  width: 0;
+  transition: width .5s;
+}
+
+.toggle-timeline {
+  background-color: #f0f0f0;
+  border-radius: 4px 4px 0 0;
+  box-shadow: 0 0 4px gray;
+  cursor: pointer;
+  letter-spacing: .5px;
+  padding: 4px 1em;
+  transform: rotate(90deg) translateY(-50%);
+  transform-origin: 0 50%;
+}
+
+.toggle-timeline:after {
+  content: '▼';
+  font-size: 6pt;
+  padding-left: 1em;
+}
+
+.toggle-timeline.collapsed {
+  background-color: white;
+}
+
+.toggle-timeline.collapsed:after {
+  content: '▲';
+}
+
+.vertical-middle {
+  position: relative;
+  top: 50%;
+  transform: translateY(-50%);
 }

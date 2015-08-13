@@ -5,12 +5,12 @@
 var $ = require('../util/jquery');
 var defineClass = require('../util/define-class');
 
-var Destination = require('../destination');
+var Destinations = require('../destinations');
 var Place = require('../place');
 var DestinationInfo = require('./destination-info');
 var DestinationMarker = require('./destination-marker');
 
-var strings = require('../strings').currentLocale;
+var describeDestination = require('../describe-destination');
 
 //named destination marker clients
 var SEARCH_CLIENT = 'search';
@@ -28,16 +28,10 @@ var Map = defineClass({
       });
     },
 
-    addDestination: function() {
+    addDestination: function(index) {
       var self = this;
 
-      var destination = new Destination();
-      if (!this.origin) {
-        this.finalDestination = this.origin = destination;
-      } else {
-        this.finalDestination.bindNext(destination);
-        this.finalDestination = destination;
-      }
+      var destination = this.destinations.add(index);
 
       destination.onPlaceChange.add(function(place) {
         self.handleDestinationPlaceChange(destination, place);
@@ -50,6 +44,19 @@ var Map = defineClass({
       });
 
       return destination;
+    },
+
+    getDestination: function(index) {
+      return this.destinations.get(index);
+    },
+
+    removeDestination: function(index) {
+      //TODO(rosswang): clear any rendered legs
+      return this.destinations.remove(index);
+    },
+
+    getSelectedDestination: function() {
+      return this.selectedDestination;
     },
 
     clearSearchMarkers: function() {
@@ -73,27 +80,47 @@ var Map = defineClass({
 
     fitAll: function() {
       var geoms = [];
-      var dest = this.origin;
 
       function addToGeoms() {
         geoms.push({ location: this });
       }
 
-      while (dest) {
-        if (dest.hasPlace()) {
-          if (dest.leg && dest.leg.sync) {
-            $.each(dest.leg.sync.routes[0]['overview_path'], addToGeoms);
+      this.destinations.each(function() {
+        if (this.hasPlace()) {
+          if (this.leg && this.leg.sync) {
+            $.each(this.leg.sync.routes[0]['overview_path'], addToGeoms);
           }
-          geoms.push(dest.getPlace().getGeometry());
+          geoms.push(this.getPlace().getGeometry());
         }
-        dest = dest.getNext();
-      }
+      });
 
       this.ensureGeomsVisible(geoms);
     },
 
     ensureVisible: function(place) {
       this.ensureGeomsVisible([place.getGeometry()]);
+    },
+
+    invalidateSize: function() {
+      this.maps.event.trigger(this.map, 'resize');
+    },
+
+    /**
+     * @return whether or not location selection is now enabled. Location
+     *  selection can only be enabled when a destination slot has been selected.
+     */
+    enableLocationSelection: function() {
+      if (this.selectedDestination) {
+        this.map.setOptions({ draggableCursor: 'auto' });
+        this.locationSelectionEnabled = true;
+        return true;
+      }
+      return false;
+    },
+
+    disableLocationSelection: function() {
+      this.map.setOptions({ draggableCursor: null });
+      this.locationSelectionEnabled = false;
     },
 
     showSearchResults: function(results) {
@@ -106,17 +133,14 @@ var Map = defineClass({
         return result.geometry;
       }));
 
-      if (results.length === 1) {
-        var place = new Place(results[0]);
+      var dest = this.selectedDestination;
+      if (results.length === 1 && dest) {
         /* It would be nice if we could distinguish between an autocomplete
          * click and a normal search so that we don't overwrite the search box
          * text for the autocomplete click.*/
-        var dest = this.selectedDestination;
-        if (dest) {
-          dest.setPlace(place);
-          self.createDestinationMarker(dest);
-        }
-      } else if (results.length > 1) {
+        dest.setPlace(new Place(results[0]));
+        self.createDestinationMarker(dest);
+      } else if (results.length > 0) {
         $.each(results, function(i, result) {
           var place = new Place(result);
 
@@ -124,13 +148,13 @@ var Map = defineClass({
             DestinationMarker.color.RED);
           self.searchMarkers.push(marker);
 
-          marker.onClick.add(function() {
+          marker.onClick.add(marker.restrictListenerToClient(function() {
             var dest = self.selectedDestination;
             if (dest) {
               dest.setPlace(place);
               self.associateDestinationMarker(dest, marker);
             }
-          });
+          }));
         });
       }
     }
@@ -181,20 +205,7 @@ var Map = defineClass({
       destination.onDeselect.add(handleSelection);
 
       function handleOrdinalChange() {
-        var destLabel;
-        if (!destination.hasPrevious()) {
-          destLabel = strings['Origin'];
-          marker.setIcon(DestinationMarker.icon.ORIGIN);
-        } else if (!destination.hasNext()) {
-          destLabel = strings[destination.getIndex() === 1?
-            'Destination' : 'Final destination'];
-          marker.setIcon(DestinationMarker.icon.DESTINATION);
-        } else {
-          destLabel = strings.destination(destination.getIndex());
-          marker.setLabel(destination.getIndex());
-        }
-
-        marker.setDestinationLabel(destLabel);
+        describeDestination.decorateMarker(marker, destination);
       }
 
       destination.onOrdinalChange.add(handleOrdinalChange);
@@ -242,7 +253,6 @@ var Map = defineClass({
       destination.onPlaceChange.remove(
         this.handleSelectedDestinationPlaceChange);
       this.disableLocationSelection();
-      this.clearSearchMarkers();
     },
 
     handleDestinationSelect: function(destination) {
@@ -330,10 +340,11 @@ var Map = defineClass({
 
           self.geocoder.geocode({ location: latLng },
             function(results, status) {
+              var origin = self.destinations.get(0);
               if (status === maps.GeocoderStatus.OK &&
-                  self.origin && !self.origin.hasPlace()) {
-                self.origin.setPlace(new Place(results[0]));
-                self.createDestinationMarker(self.origin);
+                  origin && !origin.hasPlace()) {
+                origin.setPlace(new Place(results[0]));
+                self.createDestinationMarker(origin);
               }
             });
           });
@@ -377,29 +388,28 @@ var Map = defineClass({
       }
     },
 
-    enableLocationSelection: function() {
-      this.map.setOptions({ draggableCursor: 'auto' });
-      this.locationSelectionEnabled = true;
-    },
-
-    disableLocationSelection: function() {
-      this.map.setOptions({ draggableCursor: null });
-      this.locationSelectionEnabled = false;
-    },
-
     selectLocation: function(latLng) {
       var self = this;
       var maps = this.maps;
 
       var dest = this.selectedDestination;
-      if (dest && this.locationSelectionEnabled) {
-        self.geocoder.geocode({ location: latLng },
-          function(results, status) {
-            if (status === maps.GeocoderStatus.OK) {
-              dest.setPlace(new Place(results[0]));
-              self.createDestinationMarker(dest);
-            }
-          });
+      if (dest) {
+        if (this.locationSelectionEnabled) {
+          self.geocoder.geocode({ location: latLng },
+            function(results, status) {
+              if (status === maps.GeocoderStatus.OK) {
+                dest.setPlace(new Place(results[0]));
+                self.createDestinationMarker(dest);
+
+                /* If we've just picked a location like this, we probably don't
+                 * care about search results anymore. */
+                self.clearSearchMarkers();
+              }
+            });
+        } else {
+          dest.deselect();
+          this.closeActiveInfoWindow();
+        }
       }
     }
   },
@@ -407,14 +417,15 @@ var Map = defineClass({
   constants: ['$', 'maps'],
   events: {
     /**
+     * @param bounds
+     */
+    onBoundsChange: '',
+
+    /**
      * @param error A union with one of the following keys:
      *  directionsStatus
      */
-    onError: 'memory',
-    /**
-     * @param bounds
-     */
-    onBoundsChange: ''
+    onError: 'memory'
   },
 
   // https://developers.google.com/maps/documentation/javascript/tutorial
@@ -427,6 +438,7 @@ var Map = defineClass({
     this.navigator = opts.navigator || global.navigator;
     this.geocoder = new maps.Geocoder();
     this.directionsService = new maps.DirectionsService();
+    this.destinations = new Destinations();
 
     this.$ = $('<div>').addClass('map-canvas');
 

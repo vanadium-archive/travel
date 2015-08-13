@@ -5,10 +5,13 @@
 var jq = require('jquery');
 var window = require('global/window');
 
+var $;
 if (window.document) {
-  module.exports = jq;
+  $ = jq;
 } else {
   var jsdom = require('jsdom').jsdom;
   window = jsdom().parentWindow;
-  module.exports = jq(window);
+  $ = jq(window);
 }
+
+module.exports = $;

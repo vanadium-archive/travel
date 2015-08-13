@@ -45,78 +45,37 @@ var Destination = defineClass({
     },
 
     hasNext: function() {
-      return !!this.next;
+      return this.index < this.list.count() - 1;
     },
 
     getNext: function() {
-      return this.next;
-    },
-
-    bindNext: function(next) {
-      var oldNext = this.next;
-      if (oldNext !== next) {
-        if (oldNext) {
-          oldNext.bindPrev(null);
-        }
-
-        this.next = next;
-
-        if (next) {
-          next.bindPrevious(this.ifc);
-        }
-
-        if (!(oldNext && next)) {
-          this.onOrdinalChange(); //changed to or from last
-        }
-      }
+      return this.list.get(this.index + 1);
     },
 
     hasPrevious: function() {
-      return !!this.prev;
+      return this.index > 0;
     },
 
     getPrevious: function() {
-      return this.prev;
-    },
-
-    bindPrevious: function(prev) {
-      if (this.prev !== prev) {
-        if (this.prev) {
-          this.prev.onOrdinalChange.remove(this.updateIndex);
-          this.prev.bindNext(null);
-        }
-
-        this.prev = prev;
-
-        if (prev) {
-          prev.bindNext(this.ifc);
-          prev.onOrdinalChange.add(this.updateIndex);
-        }
-
-        this.updateIndex();
-      }
+      return this.hasPrevious()? this.list.get(this.index - 1) : null;
     }
   },
 
   privates: {
-    updateIndex: function() {
-      var oldIndex = this.index;
-      if (this.prev) {
-        this.index = this.prev.getIndex() + 1;
-      } else {
-        this.index = 0;
-      }
-      if (oldIndex !== this.index) {
-        this.onOrdinalChange();
-      }
+    setIndex: function(index) {
+      this.index = index;
     }
   },
 
   events: [
     /**
      * Fired when properties related to the ordering of this destination with
-     * respect to other destinations have changed. Such properties include
+     * respect to other timeline have changed. Such properties include
      * whether this destination is or last and its index number.
+     *
+     * @param index the new index, which may not have changed. If the index has
+     *  not changed, then this event is in response to the destination changing
+     *  to or from last.
      */
     'onOrdinalChange',
     /**
@@ -129,9 +88,13 @@ var Destination = defineClass({
     'onDeselect'
   ],
 
-  init: function() {
+  init: function(list, index, callbacks) {
+    this.list = list;
     this.selected = false;
-    this.index = 0;
+    this.index = index;
+
+    callbacks.ordinalChange = this.onOrdinalChange;
+    this.onOrdinalChange.add(this.setIndex);
   }
 });
 

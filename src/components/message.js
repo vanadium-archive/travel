@@ -17,10 +17,18 @@ var Message = defineClass({
       };
     },
 
-    error: function(text) {
+    error: function(err) {
+      if (typeof err !== 'string') {
+        console.error(err);
+      }
+
+      while (err.message) {
+        err = err.message; //ExtensionCrashError.message.message = ...
+      }
+
       return {
         type: Message.ERROR,
-        text: text
+        text: err.msg || err.toString()
       };
     }
   },

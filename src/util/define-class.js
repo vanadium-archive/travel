@@ -114,14 +114,20 @@ defineClass.innerClass = function(def) {
 };
 
 /**
- * Decorates a member function with a like-signatured function to be called
- * prior to the main invocation.
+ * Decorates a member function with like-signatured functions to be called
+ * before and/or after the main invocation.
  */
-defineClass.decorate = function(context, name, before)  {
+defineClass.decorate = function(context, name, before, after)  {
   var proto = context[name];
   context[name] = function() {
-    before.apply(context, arguments);
-    return proto.apply(context, arguments);
+    if (before) {
+      before.apply(context, arguments);
+    }
+    var ret = proto.apply(context, arguments);
+    if (after) {
+      after.apply(context, arguments);
+    }
+    return ret;
   };
 };
 

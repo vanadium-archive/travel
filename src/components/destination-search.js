@@ -5,10 +5,21 @@
 var $ = require('../util/jquery');
 var defineClass = require('../util/define-class');
 
-var strings = require('../strings').currentLocale;
-
-var DestinationControl = defineClass({
+var DestinationSearch = defineClass({
   publics: {
+    clear: function() {
+      this.setPlace(null);
+      this.$searchBox.prop('value', '');
+    },
+
+    enable: function() {
+      this.$searchBox.removeAttr('disabled');
+    },
+
+    disable: function() {
+      this.$searchBox.attr('disabled', 'disabled');
+    },
+
     focus: function() {
       this.$.find('input:visible').focus();
     },
@@ -21,84 +32,51 @@ var DestinationControl = defineClass({
       this.searchBox.setBounds(bounds);
     },
 
-    selectControl: function() {
-      if (this.destination) {
-        this.destination.select();
+    select: function() {
+      this.$.addClass('selected');
+    },
+
+    deselect: function() {
+      if (this.isSelected()) {
+        this.$.removeClass('selected');
+        this.onDeselect();
       }
     },
 
-    deselectControl: function() {
-      if (this.destination) {
-        this.destination.deselect();
+    isSelected: function() {
+      return this.$.hasClass('selected');
+    },
+
+    getPlace: function() {
+      return this.place;
+    },
+
+    setPlace: function(place) {
+      var prev = this.place;
+      if (prev !== place) {
+        this.place = place;
+        this.setAutocomplete(!place);
+
+        var newValue;
+        if (place) {
+          newValue = place.getSingleLine();
+        } else if (!this.hasFocus()) {
+          newValue = '';
+        }
+        if (newValue !== undefined) {
+          this.$searchBox.prop('value', newValue);
+        }
+
+        this.onPlaceChange(place, prev);
       }
     },
 
-    bindDestination: function(destination) {
-      if (this.destination) {
-        this.destination.onPlaceChange.remove(this.handlePlaceChange);
-        this.destination.onSelect.remove(this.handleSelect);
-        this.destination.onDeselect.remove(this.handleDeselect);
-        this.destination.onOrdinalChange.remove(this.updateOrdinal);
-      }
-
-      this.destination = destination;
-
-      if (destination) {
-        destination.onPlaceChange.add(this.handlePlaceChange);
-        destination.onSelect.add(this.handleSelect);
-        destination.onDeselect.add(this.handleDeselect);
-        destination.onOrdinalChange.add(this.updateOrdinal);
-      }
-
-      this.updateOrdinal();
-      this.handlePlaceChange(destination && destination.getPlace());
-      if (destination && destination.isSelected()) {
-        this.handleSelect();
-      } else {
-        this.handleDeselect();
-      }
+    setPlaceholder: function(placeholder) {
+      this.$searchBox.attr('placeholder', placeholder);
     }
   },
 
   privates: {
-    handlePlaceChange: function(place) {
-      this.setAutocomplete(!place);
-
-      var newValue;
-      if (place) {
-        newValue = place.getSingleLine();
-      } else if (!this.hasFocus()) {
-        newValue = '';
-      }
-      if (newValue !== undefined) {
-        this.$searchBox.prop('value', newValue);
-      }
-    },
-
-    updateOrdinal: function() {
-      var placeholder;
-      var destination = this.destination;
-      if (destination) {
-        if (!destination.hasPrevious()) {
-          placeholder = strings['Origin'];
-        } else if (destination.getIndex() === 1 && !destination.hasNext()) {
-          placeholder = strings['Destination'];
-        } else {
-          placeholder = strings.destination(destination.getIndex());
-        }
-      }
-
-      this.$searchBox.attr('placeholder', placeholder);
-    },
-
-    handleSelect: function() {
-      this.$.addClass('selected');
-    },
-
-    handleDeselect: function() {
-      this.$.removeClass('selected');
-    },
-
     /**
      * This is a bit of a hack; Maps API does not include functionality to
      * disable autocomplete.
@@ -117,7 +95,12 @@ var DestinationControl = defineClass({
         newBox.value = oldBox.value;
         var active = global.document &&
           global.document.activeElement === oldBox;
-        if (newBox.setSelectionRange) {
+
+        /* Restrict selection restoration to active elements because
+         * setSelectionRange apparently takes keyboard focus away from the
+         * currently focused element without actually setting it to anything,
+         * and trying to restore focus afterwards doesn't work. */
+        if (active && newBox.setSelectionRange) {
           //non-universal browser support
           newBox.setSelectionRange(oldBox.selectionStart, oldBox.selectionEnd);
         }
@@ -140,10 +123,19 @@ var DestinationControl = defineClass({
      * @param event jQuery Event object for text box focus event.
      */
     'onFocus',
+
+    /**
+     * @param place
+     * @param previous
+     */
+    'onPlaceChange',
+
     /**
      * @param places (array of places)
      */
-    'onSearch'
+    'onSearch',
+
+    'onDeselect'
   ],
 
   constants: ['$'],
@@ -161,14 +153,11 @@ var DestinationControl = defineClass({
 
     $searchBox.focus(this.onFocus);
     $searchBox.on('input', function() {
-      if (self.destination) {
-        self.destination.setPlace(null);
-      }
+      self.setPlace(null);
     });
 
     this.$ = $('<div>')
-      .addClass('destination')
-      .addClass('autocomplete')
+      .addClass('destination autocomplete')
       .append($searchBox);
 
     this.searchBox = new maps.places.SearchBox($searchBox[0]);
@@ -181,4 +170,4 @@ var DestinationControl = defineClass({
   }
 });
 
-module.exports = DestinationControl;
+module.exports = DestinationSearch;
