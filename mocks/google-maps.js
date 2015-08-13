@@ -41,6 +41,8 @@ var InfoWindow = defineClass({
 
 var Map = defineClass({
   publics: {
+    getBounds: function(){},
+
     registerInfoWindow: function(wnd) {
       this.infoWindows.push(wnd);
     },
@@ -61,11 +63,8 @@ var Map = defineClass({
   constants: [ 'controls' ],
 
   events: {
-    //some maps API members are lower_underscore
-    /* jshint camelcase: false */
-    bounds_changed: 'public',
+    'bounds_changed': 'public',
     click: 'public'
-    /* jshint camelcase: true */
   },
 
   init: function(canvas) {
@@ -98,6 +97,8 @@ var Marker = defineClass({
       return this.map;
     },
 
+    setTitle: function(){},
+
     toString: function() { return 'mock Marker'; }
   },
 
@@ -112,14 +113,12 @@ var Marker = defineClass({
 
 var SearchBox = defineClass({
   publics: {
+    setBounds: function(){},
     toString: function() { return 'mock SearchBox'; }
   },
 
   events: {
-    //some maps API members are lower_underscore
-    /* jshint camelcase: false */
-    places_changed: 'public'
-    /* jshint camelcase: true */
+    'places_changed': 'public'
   }
 });
 

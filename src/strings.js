@@ -18,6 +18,10 @@ function getStrings(locale) {
       REQUEST_DENIED: 'Request denied',
       UNKNOWN_ERROR: 'Server error'
     },
+    'Final destination': 'Final destination',
+    label: function(label, details) {
+      return label + ': ' + details;
+    },
     'Origin': 'Origin',
     'Travel Planner': 'Travel Planner',
     'Unknown error': 'Unknown error'

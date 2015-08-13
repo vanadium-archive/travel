@@ -4,21 +4,21 @@
 
 var test = require('tape');
 
-var message = require('../../src/components/message');
+var Message = require('../../src/components/message');
 
 test('init', function(t) {
-  t.ok(new message.Message(), 'default instantiation');
+  t.ok(new Message(), 'default instantiation');
   t.end();
 });
 
 test('dom', function(t) {
-  var msg = new message.Message(message.info('Hello, world!'));
+  var msg = new Message(Message.info('Hello, world!'));
   t.equal(msg.$.length, 1, 'unique element');
   t.equal(msg.$[0].tagName, 'LI', 'tag name');
   t.assert(msg.$.hasClass('info'), 'class info');
   t.equal(msg.$.text(), 'Hello, world!', 'text');
 
-  msg.setType(message.ERROR);
+  msg.setType(Message.ERROR);
   t.notOk(msg.$.hasClass('info'), 'class not info');
   t.assert(msg.$.hasClass('error'), 'class error');
 

@@ -6,15 +6,13 @@ var test = require('tape');
 var $ = require('../../src/util/jquery');
 
 var DestinationMarker = require('../../src/components/destination-marker');
-var normalizeDestination =
-  require('../../src/components/destination').normalizeDestination;
+var Place = require('../../src/place');
 var mockMaps = require('../../mocks/google-maps');
 
 function mockMarker(client, color) {
   var map = new mockMaps.Map($('<div>')[0]);
   return new DestinationMarker(mockMaps, map,
-    normalizeDestination(mockMaps.places.mockPlaceResult),
-    client, color);
+    new Place(mockMaps.places.mockPlaceResult), client, color);
 }
 
 test('client events', function(t) {

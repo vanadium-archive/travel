@@ -5,88 +5,85 @@
 var $ = require('../util/jquery');
 var defineClass = require('../util/define-class');
 
-var INFO = 'INFO';
-var ERROR = 'ERROR';
+var Message = defineClass({
+  statics: {
+    INFO: 'INFO',
+    ERROR: 'ERROR',
 
-function info(text) {
-  return {
-    type: INFO,
-    text: text
-  };
-}
+    info: function(text) {
+      return {
+        type: Message.INFO,
+        text: text
+      };
+    },
 
-function error(text) {
-  return {
-    type: ERROR,
-    text: text
-  };
-}
+    error: function(text) {
+      return {
+        type: Message.ERROR,
+        text: text
+      };
+    }
+  },
 
-module.exports = {
-  INFO: INFO,
-  ERROR: ERROR,
-  info: info,
-  error: error,
-
-  Message: defineClass({
-    publics: {
-      setType: function(type) {
-        switch (type) {
-          case INFO:
-            this.$.attr('class', 'info');
-            break;
-          case ERROR:
-            this.$.attr('class', 'error');
-            break;
-          default:
-            throw 'Invalid message type ' + type;
-        }
-      },
-
-      setText: function(text) {
-        this.$.text(text);
-      },
-
-      set: function(message) {
-        if (!message) {
-          this.onLowerPriority();
-          return;
-        }
-
-        if (typeof message === 'string') {
-          message = info(message);
-        }
-
-        var self = this;
-
-        this.setType(message.type);
-        this.setText(message.text);
-
-        if (message.promise) {
-          message.promise.then(function(message) {
-            self.set(message);
-          }, function(err) {
-            self.set(error(err));
-          });
-        } else {
-          this.onLowerPriority();
-        }
+  publics: {
+    setType: function(type) {
+      switch (type) {
+        case Message.INFO:
+          this.$.attr('class', 'info');
+          break;
+        case Message.ERROR:
+          this.$.attr('class', 'error');
+          break;
+        default:
+          throw 'Invalid message type ' + type;
       }
     },
 
-    constants: [ '$' ],
-    events: {
-      /**
-       * Event raised when the message is no longer pending user action.
-       */
-      onLowerPriority: 'memory once'
+    setText: function(text) {
+      this.$.text(text);
     },
 
-    init: function(initial) {
-      this.$ = $('<li>');
-      if (initial) {
-        this.set(initial);
+    set: function(message) {
+      if (!message) {
+        this.onLowerPriority();
+        return;
+      }
+
+      if (typeof message === 'string') {
+        message = Message.info(message);
+      }
+
+      var self = this;
+
+      this.setType(message.type);
+      this.setText(message.text);
+
+      if (message.promise) {
+        message.promise.then(function(message) {
+          self.set(message);
+        }, function(err) {
+          self.set(Message.error(err));
+        });
+      } else {
+        this.onLowerPriority();
       }
     }
-  })
-};
+  },
+
+  constants: [ '$' ],
+  events: {
+    /**
+     * Event raised when the message is no longer pending user action.
+     */
+    onLowerPriority: 'memory once'
+  },
+
+  init: function(initial) {
+    this.$ = $('<li>');
+    if (initial) {
+      this.set(initial);
+    }
+  }
+});
+
+module.exports = Message;

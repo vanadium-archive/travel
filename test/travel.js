@@ -14,16 +14,6 @@ function cleanDom() {
   $('body').empty();
 }
 
-test('init', function(t) {
-  /* jshint -W031 */ //instantiation smoke test
-  new Travel({
-    maps: mockMaps
-  });
-  /* jshint +W031 */
-  t.end();
-  cleanDom();
-});
-
 test('domRoot', function(t) {
   var $root = $('<div>');
   var root = $root[0];
@@ -41,4 +31,25 @@ test('domRoot', function(t) {
 
   t.end();
   cleanDom();
+});
+
+test('messages', function(t) {
+  var travel = new Travel({
+    maps: mockMaps,
+    vanadiumWrapper: mockVanadiumWrapper
+  });
+
+  var $messages = $('.messages ul');
+  t.ok($messages.length, 'message display exists');
+  var $messageItems = $messages.children();
+  t.equals($messageItems.length, 1,
+    'message display has initial status message');
+
+  travel.info('Test message.');
+
+  $messageItems = $messages.children();
+  t.equals($messageItems.length, 2, 'message display shows 2 messages');
+  t.equals($($messageItems[1]).text(), 'Test message.',
+    'message displays message text');
+  t.end();
 });

@@ -5,18 +5,53 @@
 var $ = require('../util/jquery');
 var defineClass = require('../util/define-class');
 
-var Destinations = require('./destinations');
+var Destination = require('../destination');
+var Place = require('../place');
 var DestinationInfo = require('./destination-info');
 var DestinationMarker = require('./destination-marker');
-var Messages = require('./messages');
 
-var normalizeDestination = require('./destination').normalizeDestination;
+var strings = require('../strings').currentLocale;
 
 //named destination marker clients
 var SEARCH_CLIENT = 'search';
 
-var Widget = defineClass({
+var Map = defineClass({
   publics: {
+    getBounds: function() {
+      return this.map.getBounds();
+    },
+
+    addControls: function(controlPosition, $controls) {
+      var controls = this.map.controls[controlPosition];
+      $controls.each(function() {
+        controls.push(this);
+      });
+    },
+
+    addDestination: function() {
+      var self = this;
+
+      var destination = new Destination();
+      if (!this.origin) {
+        this.finalDestination = this.origin = destination;
+      } else {
+        this.finalDestination.bindNext(destination);
+        this.finalDestination = destination;
+      }
+
+      destination.onPlaceChange.add(function(place) {
+        self.handleDestinationPlaceChange(destination, place);
+      });
+      destination.onDeselect.add(function() {
+        self.handleDestinationDeselect(destination);
+      });
+      destination.onSelect.add(function() {
+        self.handleDestinationSelect(destination);
+      });
+
+      return destination;
+    },
+
     clearSearchMarkers: function() {
       $.each(this.searchMarkers, function() {
         this.removeClient(SEARCH_CLIENT);
@@ -30,146 +65,212 @@ var Widget = defineClass({
       }
     },
 
-    deselectDestinationControl: function(closeInfoWindow) {
-      if (this.selectedDestinationControl) {
-        this.selectedDestinationControl.deselectControl();
-        this.selectedDestinationControl = null;
-        this.disableLocationSelection();
-        this.clearSearchMarkers();
+    deselectDestination: function() {
+      if (this.selectedDestination) {
+        this.selectedDestination.deselect();
+      }
+    },
 
-        if (closeInfoWindow !== false) {
-          this.closeActiveInfoWindow();
+    fitAll: function() {
+      var geoms = [];
+      var dest = this.origin;
+
+      function addToGeoms() {
+        geoms.push({ location: this });
+      }
+
+      while (dest) {
+        if (dest.hasPlace()) {
+          if (dest.leg && dest.leg.sync) {
+            $.each(dest.leg.sync.routes[0]['overview_path'], addToGeoms);
+          }
+          geoms.push(dest.getPlace().getGeometry());
         }
+        dest = dest.getNext();
       }
+
+      this.ensureGeomsVisible(geoms);
     },
 
-    fitAllDestinations: function() {
-      var points = this.destinations.getDestinations()
-        .map(function(dest) { return dest.getPlace(); })
-        .filter(function(place) { return place; })
-        .reduce(function(acc, place) {
-          acc.push(place.place.location);
-          return acc;
-        }, []);
-
-      var curBounds = this.map.getBounds();
-      if (points.every(function(point) { return curBounds.contains(point); })) {
-        return;
-      }
-
-      if (points.length === 1) {
-        this.map.panTo(points[0]);
-      } else if (points.length > 1) {
-        this.map.fitBounds(points.reduce(function(acc, point) {
-          acc.extend(point);
-          return acc;
-        }, new this.maps.LatLngBounds()));
-      }
+    ensureVisible: function(place) {
+      this.ensureGeomsVisible([place.getGeometry()]);
     },
 
-    message: function(message) {
-      this.messages.push(message);
+    showSearchResults: function(results) {
+      var self = this;
+
+      this.clearSearchMarkers();
+      this.closeActiveInfoWindow();
+
+      this.fitGeoms(results.map(function(result) {
+        return result.geometry;
+      }));
+
+      if (results.length === 1) {
+        var place = new Place(results[0]);
+        /* It would be nice if we could distinguish between an autocomplete
+         * click and a normal search so that we don't overwrite the search box
+         * text for the autocomplete click.*/
+        var dest = this.selectedDestination;
+        if (dest) {
+          dest.setPlace(place);
+          self.createDestinationMarker(dest);
+        }
+      } else if (results.length > 1) {
+        $.each(results, function(i, result) {
+          var place = new Place(result);
+
+          var marker = self.createMarker(place, SEARCH_CLIENT,
+            DestinationMarker.color.RED);
+          self.searchMarkers.push(marker);
+
+          marker.onClick.add(function() {
+            var dest = self.selectedDestination;
+            if (dest) {
+              dest.setPlace(place);
+              self.associateDestinationMarker(dest, marker);
+            }
+          });
+        });
+      }
     }
   },
 
   privates: {
-    createMarker: function(normalizedPlace, client, color) {
-      var marker = new DestinationMarker(this.maps, this.map, normalizedPlace,
+    createMarker: function(place, client, color) {
+      var self = this;
+
+      var marker = new DestinationMarker(this.maps, this.map, place,
         client, color);
 
-      if (normalizedPlace.details) {
-        marker.onClick.add($.proxy(this, 'showDestinationInfo', marker), true);
+      if (place.hasDetails()) {
+        marker.onClick.add(function() {
+          self.showDestinationInfo(marker);
+        }, true);
       }
 
       return marker;
     },
 
-    createDestinationMarker: function(normalizedPlace, destinationControl) {
-      var widget = this;
+    createDestinationMarker: function(destination) {
+      var marker = this.createMarker(destination.getPlace(), destination,
+        this.getAppropriateDestinationMarkerColor(destination));
 
-      var marker = this.createMarker(normalizedPlace, destinationControl,
-        this.getAppropriateDestinationMarkerColor(destinationControl));
-      destinationControl.marker = marker;
-
-      marker.onClick.add(function() {
-        widget.selectDestinationControl(destinationControl, false);
-      });
+      this.bindDestinationMarker(destination, marker);
 
       return marker;
+    },
+
+    associateDestinationMarker: function(destination, marker) {
+      if (!marker.onClick.has(destination.select)) {
+        marker.pushClient(destination,
+          this.getAppropriateDestinationMarkerColor(destination));
+
+        this.bindDestinationMarker(destination, marker);
+      }
+    },
+
+    bindDestinationMarker: function(destination, marker) {
+      var self = this;
+
+      marker.onClick.add(destination.select);
+      function handleSelection() {
+        marker.setColor(self.getAppropriateDestinationMarkerColor(destination));
+      }
+      destination.onSelect.add(handleSelection);
+      destination.onDeselect.add(handleSelection);
+
+      function handleOrdinalChange() {
+        var destLabel;
+        if (!destination.hasPrevious()) {
+          destLabel = strings['Origin'];
+          marker.setIcon(DestinationMarker.icon.ORIGIN);
+        } else if (!destination.hasNext()) {
+          destLabel = strings[destination.getIndex() === 1?
+            'Destination' : 'Final destination'];
+          marker.setIcon(DestinationMarker.icon.DESTINATION);
+        } else {
+          destLabel = strings.destination(destination.getIndex());
+          marker.setLabel(destination.getIndex());
+        }
+
+        marker.setDestinationLabel(destLabel);
+      }
+
+      destination.onOrdinalChange.add(handleOrdinalChange);
+      handleOrdinalChange();
+
+      function handlePlaceChange() {
+        marker.removeClient(destination);
+        marker.onClick.remove(destination.select);
+        destination.onSelect.remove(handleSelection);
+        destination.onDeselect.remove(handleSelection);
+        destination.onOrdinalChange.remove(handleOrdinalChange);
+        destination.onPlaceChange.remove(handlePlaceChange);
+      }
+
+      destination.onPlaceChange.add(handlePlaceChange);
+    },
+
+    getAppropriateDestinationMarkerColor: function(destination) {
+      return destination.isSelected()?
+        DestinationMarker.color.GREEN : DestinationMarker.color.BLUE;
     },
 
     showDestinationInfo: function(destinationMarker) {
       if (!this.info) {
         this.info = new DestinationInfo(
-          this.maps, this.map, destinationMarker.normalizedPlace.details);
+          this.maps, this.map, destinationMarker.place);
       } else {
-        this.info.setDetails(destinationMarker.normalizedPlace.details);
+        this.info.setPlace(destinationMarker.place);
       }
 
       this.info.show(destinationMarker.marker);
     },
 
-    getAppropriateDestinationMarkerColor: function(destination) {
-      return destination === this.selectedDestinationControl?
-        DestinationMarker.color.GREEN : DestinationMarker.color.BLUE;
-    },
-
-    associateDestinationMarker: function(destination, marker) {
-      if (destination.marker === marker) {
-        return;
-      }
-
-      var widget = this;
-
-      if (destination.marker) {
-        destination.marker.removeClient(destination);
-      }
-
-      destination.marker = marker;
-
-      if (marker) {
-        marker.pushClient(destination,
-          this.getAppropriateDestinationMarkerColor(destination));
-        marker.onClick.add(function() {
-          widget.selectDestinationControl(destination, false);
-        });
-      }
-    },
-
-    handleDestinationSet: function(destination, normalizedPlace) {
-      if (destination.marker) {
-        if (!normalizedPlace) {
-          this.associateDestinationMarker(destination, null);
-          this.enableLocationSelection();
-        }
-        /* Else assume we've just updated the marker explicitly via
-         * associateDestationMarker. Corollary: be sure to call that... */
-      } else if (normalizedPlace) {
-        this.createDestinationMarker(normalizedPlace, destination);
-      }
-
-      if (normalizedPlace) {
-        this.disableLocationSelection();
-      }
-
+    handleDestinationPlaceChange: function(destination, place) {
       if (destination.getPrevious()) {
         this.updateLeg(destination);
       }
-
       if (destination.getNext()) {
         this.updateLeg(destination.getNext());
       }
     },
 
-    updateLeg: function(destinationControl) {
-      var widget = this;
+    handleDestinationDeselect: function(destination) {
+      this.selectedDestination = null;
+      destination.onPlaceChange.remove(
+        this.handleSelectedDestinationPlaceChange);
+      this.disableLocationSelection();
+      this.clearSearchMarkers();
+    },
+
+    handleDestinationSelect: function(destination) {
+      this.deselectDestination();
+
+      this.selectedDestination = destination;
+      destination.onPlaceChange.add(this.handleSelectedDestinationPlaceChange);
+      this.handleSelectedDestinationPlaceChange(destination.getPlace());
+    },
+
+    handleSelectedDestinationPlaceChange: function(place) {
+      if (place) {
+        this.disableLocationSelection();
+        this.ensureVisible(place);
+      } else {
+        this.enableLocationSelection();
+      }
+    },
+
+    updateLeg: function(destination) {
+      var self = this;
       var maps = this.maps;
       var map = this.map;
 
-      var origin = destinationControl.getPrevious().getPlace();
-      var destination = destinationControl.getPlace();
+      var a = destination.getPrevious().getPlace();
+      var b = destination.getPlace();
 
-      var leg = destinationControl.leg;
+      var leg = destination.leg;
       if (leg) {
         if (leg.async) {
           leg.async.reject();
@@ -181,13 +282,13 @@ var Widget = defineClass({
           preserveViewport: true,
           suppressMarkers: true
         });
-        destinationControl.leg = leg = { renderer: renderer };
+        destination.leg = leg = { renderer: renderer };
       }
 
-      if (origin && destination) {
+      if (a && b) {
         var request = {
-          origin: origin.place.location,
-          destination: destination.place.location,
+          origin: a.getLocation(),
+          destination: b.getLocation(),
           travelMode: maps.TravelMode.DRIVING // TODO(rosswang): user choice
         };
 
@@ -196,21 +297,27 @@ var Widget = defineClass({
         this.directionsService.route(request, function(result, status) {
           if (status === maps.DirectionsStatus.OK) {
             leg.async.resolve(result);
+            leg.sync = result;
           } else {
-            widget.onError({ directionsStatus: status });
+            self.onError({ directionsStatus: status });
             leg.async.reject(status);
           }
         });
 
-        leg.async.done(function(route) {
-          leg.renderer.setDirections(route);
+        leg.async.done(function(result) {
+          leg.renderer.setDirections(result);
           leg.renderer.setMap(map);
+
+          self.ensureGeomsVisible(result.routes[0]['overview_path'].map(
+            function(point) {
+              return { location: point };
+            }));
         });
       }
     },
 
     centerOnCurrentLocation: function() {
-      var widget = this;
+      var self = this;
       var maps = this.maps;
       var map = this.map;
 
@@ -221,40 +328,53 @@ var Widget = defineClass({
             position.coords.latitude, position.coords.longitude);
           map.setCenter(latLng);
 
-          widget.geocoder.geocode({ location: latLng },
+          self.geocoder.geocode({ location: latLng },
             function(results, status) {
-              if (status === maps.GeocoderStatus.OK) {
-                var result = results[0];
-                var origin = widget.destinations.getDestinations()[0];
-                var marker = widget.createDestinationMarker(
-                  normalizeDestination(result), origin);
-
-                marker.onClick.add(function listener() {
-                  origin.set(result);
-                  marker.onClick.remove(listener);
-                });
+              if (status === maps.GeocoderStatus.OK &&
+                  self.origin && !self.origin.hasPlace()) {
+                self.origin.setPlace(new Place(results[0]));
+                self.createDestinationMarker(self.origin);
               }
             });
           });
       }
     },
 
-    bindDestinationControl: function (destination) {
-      var widget = this;
-      var maps = this.maps;
-      var map = this.map;
+    ensureGeomsVisible: function(geoms) {
+      var curBounds = this.map.getBounds();
+      if (!geoms.every(function(geom) {
+            return curBounds.contains(geom.location);
+          })) {
+        this.fitGeoms(geoms);
+      }
+    },
 
-      maps.event.addListener(map, 'bounds_changed', function() {
-        destination.setSearchBounds(map.getBounds());
-      });
+    fitGeoms: function(geoms) {
+      var curBounds = this.map.getBounds();
+      var curSize = curBounds.toSpan();
+      function wontShrink(proposed) {
+        var size = proposed.toSpan();
+        return size.lat() >= curSize.lat() || size.lng() >= curSize.lng();
+      }
 
-      destination.onFocus.add(function() {
-        widget.selectDestinationControl(destination);
-      });
-      destination.onSearch.add(
-        $.proxy(this, 'showDestinationSearchResults', destination));
-      destination.onSet.add(
-        $.proxy(this, 'handleDestinationSet', destination));
+      if (geoms.length === 1) {
+        var geom = geoms[0];
+        if (geom.viewport && wontShrink(geom.viewport)) {
+          this.map.fitBounds(geom.viewport);
+        } else {
+          this.map.panTo(geom.location);
+        }
+
+      } else if (geoms.length > 1) {
+        this.map.fitBounds(geoms.reduce(function(acc, geom) {
+          if (geom.viewport) {
+            acc.union(geom.viewport);
+          } else {
+            acc.extend(geom.location);
+          }
+          return acc;
+        }, new this.maps.LatLngBounds()));
+      }
     },
 
     enableLocationSelection: function() {
@@ -267,88 +387,17 @@ var Widget = defineClass({
       this.locationSelectionEnabled = false;
     },
 
-    selectDestinationControl: function(dest, closeInfoWindow) {
-      if (dest !== this.selectedDestinationControl) {
-        var prevDest = this.selectedDestinationControl;
-        if (prevDest && prevDest.marker) {
-          prevDest.marker.setColor(DestinationMarker.color.BLUE);
-        }
-        this.deselectDestinationControl(closeInfoWindow);
-
-        this.selectedDestinationControl = dest;
-        dest.selectControl();
-
-        if (dest.marker) {
-          dest.marker.setColor(DestinationMarker.color.GREEN);
-        }
-
-        var place = dest.getPlace();
-        if (place) {
-          this.fitAllDestinations();
-        } else {
-          this.enableLocationSelection();
-        }
-      }
-    },
-
-    showDestinationSearchResults: function(destination, places) {
-      var widget = this;
-
-      if (destination !== this.selectedDestinationControl) {
-        /* There seems to be a bug where if you click a search suggestion (for
-         * a query, not a resolved location) in autocomplete, the input box
-         * under it gets clicked and focused... I haven't been able to figure
-         * out why. */
-         destination.focus();
-      }
-
-      this.clearSearchMarkers();
-      this.closeActiveInfoWindow();
-
-      if (places.length === 1) {
-        var place = places[0];
-        this.map.panTo(place.geometry.location);
-        /* It would be nice if we could distinguish between an autocomplete
-         * click and a normal search so that we don't overwrite the search box
-         * text for the autocomplete click.*/
-        var dest = this.selectedDestinationControl;
-        if (dest) {
-          dest.set(place);
-        }
-      } else if (places.length > 1) {
-        var bounds = new this.maps.LatLngBounds();
-
-        $.each(places, function(i, place) {
-          var marker = widget.createMarker(normalizeDestination(place),
-            SEARCH_CLIENT, DestinationMarker.color.RED);
-          widget.searchMarkers.push(marker);
-
-          marker.onClick.add(function() {
-            var dest = widget.selectedDestinationControl;
-            if (dest && dest.marker !== marker) {
-              widget.associateDestinationMarker(dest, marker);
-              dest.set(place);
-            }
-          });
-
-          bounds.extend(place.geometry.location);
-        });
-
-        this.map.fitBounds(bounds);
-      }
-    },
-
     selectLocation: function(latLng) {
-      var widget = this;
+      var self = this;
       var maps = this.maps;
 
-      var dest = this.selectedDestinationControl;
+      var dest = this.selectedDestination;
       if (dest && this.locationSelectionEnabled) {
-        widget.geocoder.geocode({ location: latLng },
+        self.geocoder.geocode({ location: latLng },
           function(results, status) {
             if (status === maps.GeocoderStatus.OK) {
-              widget.associateDestinationMarker(dest, null);
-              dest.set(results[0]);
+              dest.setPlace(new Place(results[0]));
+              self.createDestinationMarker(dest);
             }
           });
       }
@@ -361,13 +410,17 @@ var Widget = defineClass({
      * @param error A union with one of the following keys:
      *  directionsStatus
      */
-    onError: 'memory'
+    onError: 'memory',
+    /**
+     * @param bounds
+     */
+    onBoundsChange: ''
   },
 
   // https://developers.google.com/maps/documentation/javascript/tutorial
   init: function(opts) {
     opts = opts || {};
-    var widget = this;
+    var self = this;
 
     var maps = opts.maps || global.google.maps;
     this.maps = maps;
@@ -387,22 +440,15 @@ var Widget = defineClass({
     var map = new maps.Map(this.$[0], this.initialConfig);
     this.map = map;
 
-    this.messages = new Messages();
-    this.destinations = new Destinations(maps);
-
-    this.destinations.addDestinationBindingHandler(
-      $.proxy(this, 'bindDestinationControl'));
-
     maps.event.addListener(map, 'click', function(e) {
-      widget.selectLocation(e.latLng);
+      self.selectLocation(e.latLng);
+    });
+    maps.event.addListener(map, 'bounds_changed', function() {
+      self.onBoundsChange(map.getBounds());
     });
 
     this.centerOnCurrentLocation();
-
-    var controls = map.controls;
-    controls[maps.ControlPosition.LEFT_TOP].push(this.destinations.$[0]);
-    controls[maps.ControlPosition.TOP_CENTER].push(this.messages.$[0]);
   }
 });
 
-module.exports = Widget;
+module.exports = Map;

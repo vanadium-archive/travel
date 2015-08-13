@@ -6,12 +6,13 @@ var test = require('tape');
 var $ = require('../../src/util/jquery');
 
 var DestinationInfo = require('../../src/components/destination-info');
+var Place = require('../../src/place');
 var mockMaps = require('../../mocks/google-maps');
 
 function setUpWithCanvas() {
   var map = new mockMaps.Map($('<div>')[0]);
   var info = new DestinationInfo(mockMaps, map,
-    mockMaps.places.mockPlaceResult);
+    new Place(mockMaps.places.mockPlaceResult));
   return {
     map: map,
     info: info

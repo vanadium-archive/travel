@@ -5,7 +5,7 @@
 var $ = require('../util/jquery');
 var defineClass = require('../util/define-class');
 
-var message = require('./message');
+var Message = require('./message');
 
 var Messages = defineClass({
   statics: {
@@ -87,7 +87,7 @@ var Messages = defineClass({
     push: function(messageData) {
       var self = this;
 
-      var messageObject = new message.Message(messageData);
+      var messageObject = new Message(messageData);
       this.$messages.append(messageObject.$);
 
       if (this.isOpen()) {
@@ -149,7 +149,7 @@ var Messages = defineClass({
   init: function() {
     this.$handle = $('<div>')
       .addClass('handle')
-      .click(this.toggle.bind(this));
+      .click(this.toggle);
 
     this.$messages = $('<ul>');
 

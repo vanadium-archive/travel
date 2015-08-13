@@ -4,7 +4,9 @@
 
 var $ = require('./util/jquery');
 
-var message = require('./components/message');
+var Destinations = require('./components/destinations');
+var Messages = require('./components/messages');
+var Message = require('./components/message');
 var vanadiumWrapperDefault = require('./vanadium-wrapper');
 
 var defineClass = require('./util/define-class');
@@ -25,34 +27,78 @@ function buildStatusErrorStringMap(statusClass, stringGroup) {
 
 var Travel = defineClass({
   publics: {
+    addDestination: function() {
+      var map = this.map;
+
+      var destination = map.addDestination();
+      var control = this.destinations.append();
+      control.bindDestination(destination);
+
+      control.setSearchBounds(map.getBounds());
+      map.onBoundsChange.add(control.setSearchBounds);
+
+      control.onFocus.add(function() {
+        if (!destination.isSelected()) {
+          map.closeActiveInfoWindow();
+          destination.select();
+        }
+      });
+
+      control.onSearch.add(function(results) {
+        map.showSearchResults(results);
+
+        /* There seems to be a bug where if you click a search suggestion (for
+         * a query, not a resolved location) in autocomplete, the input box
+         * under it gets clicked and focused... I haven't been able to figure
+         * out why. */
+         control.focus();
+      });
+
+      return control;
+    },
+
     error: function (err) {
-      this.map.message(message.error(err.toString()));
+      this.messages.push(Message.error(
+        err.message || err.msg || err.toString()));
     },
 
     info: function (info, promise) {
-      var messageData = message.info(info);
+      var messageData = Message.info(info);
       messageData.promise = promise;
-      this.map.message(messageData);
+      this.messages.push(messageData);
     }
   },
 
   init: function (opts) {
+    var self = this;
+
     opts = opts || {};
     var vanadiumWrapper = opts.vanadiumWrapper || vanadiumWrapperDefault;
-    var travel = this;
 
-    this.map = new Map(opts);
-    this.sync = new TravelSync();
+    var map = this.map = new Map(opts);
+    var maps = map.maps;
 
-    var reportError = $.proxy(this, 'error');
+    var messages = this.messages = new Messages();
+    var destinations = this.destinations = new Destinations(maps);
+
+    var sync = this.sync = new TravelSync();
+
+    var error = this.error;
+
+    map.addControls(maps.ControlPosition.TOP_CENTER, messages.$);
+    map.addControls(maps.ControlPosition.LEFT_TOP, destinations.$);
+
+    destinations.onAddClick.add(function() {
+      self.addDestination().focus();
+    });
 
     this.info(strings['Connecting...'], vanadiumWrapper.init(opts.vanadium)
       .then(function(wrapper) {
-        wrapper.onCrash.add(reportError);
+        wrapper.onCrash.add(error);
 
         var identity = new Identity(wrapper.getAccountName());
         identity.mountName = makeMountName(identity);
-        return travel.sync.start(identity.mountName, wrapper);
+        return sync.start(identity.mountName, wrapper);
       }).then(function() {
         return strings['Connected to all services.'];
       }, function(err) {
@@ -61,17 +107,20 @@ var Travel = defineClass({
       }));
 
     var directionsServiceStatusStrings = buildStatusErrorStringMap(
-      this.map.maps.DirectionsStatus, strings.DirectionsStatus);
+      maps.DirectionsStatus, strings.DirectionsStatus);
 
-    this.map.onError.add(function(err) {
+    map.onError.add(function(err) {
       var message = directionsServiceStatusStrings[err.directionsStatus] ||
         strings['Unknown error'];
 
-      reportError(message);
+      error(message);
     });
 
     var $domRoot = opts.domRoot? $(opts.domRoot) : $('body');
-    $domRoot.append(travel.map.$);
+    $domRoot.append(map.$);
+
+    this.addDestination();
+    this.addDestination();
   }
 });
 

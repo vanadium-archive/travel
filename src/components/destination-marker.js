@@ -4,45 +4,34 @@
 
 var $ = require('../util/jquery');
 var defineClass = require('../util/define-class');
+var strings = require('../strings').currentLocale;
 
-function markerIcon(color) {
-  return 'http://maps.google.com/mapfiles/ms/icons/' + color + '-dot.png';
-}
-
-function deriveTitle(normalizedPlace) {
-  return normalizedPlace.details && normalizedPlace.details.name ||
-    //some maps API members are lower_underscore
-    /* jshint camelcase: false */
-    normalizedPlace.formatted_address;
-    /* jshint camelcase: true */
+function markerIcon(opts) {
+  if (opts.icon) {
+    return 'http://chart.apis.google.com/chart?chst=d_map_pin_icon&chld=' +
+      opts.icon + '|' + opts.color;
+  } else {
+    return 'http://chart.apis.google.com/chart?chst=d_map_pin_letter&chld=' +
+      (opts.label || '•') + '|' + opts.color;
+  }
 }
 
 var DestinationMarker = defineClass({
   statics: {
     color: {
-      RED: 'red',
-      ORANGE: 'orange',
-      YELLOW: 'yellow',
-      GREEN: 'green',
-      LIGHT_BLUE: 'ltblue',
-      BLUE: 'blue',
-      PURPLE: 'purple',
-      PINK: 'pink'
-    }
-  },
-
-  privates: {
-    refreshClickability: function() {
-      this.marker.setClickable(this.onClick.has());
+      RED: 'FC6355',
+      ORANGE: 'FF8000', //TODO(rosswang): tune
+      YELLOW: 'FFFF00', //TODO(rosswang): tune
+      GREEN: '00E73D',
+      LIGHT_BLUE: '8080FF', //TODO(rosswang): tune
+      BLUE: '7090FC', // originally '5781FC',
+      PURPLE: '8000FF', //TODO(rosswang): tune
+      PINK: 'FF8080' //TODO(rosswang): tune
     },
 
-    topClient: function() {
-      return this.clients[this.clients.length - 1];
-    },
-
-    updateColor: function() {
-      var color = this.topClient().color;
-      this.marker.setIcon(markerIcon(color));
+    icon: {
+      ORIGIN: 'home',
+      DESTINATION: 'flag'
     }
   },
 
@@ -52,9 +41,13 @@ var DestinationMarker = defineClass({
     },
 
     pushClient: function(client, color) {
-      color = color || this.topClient().color;
-      this.clients.push({ client: client, color: color, listeners: [] });
-      this.updateColor();
+      this.clients.push($.extend({}, this.topClient(), {
+        client: client,
+        color: color,
+        listeners: []
+      }));
+      this.updateIcon();
+      this.updateTitle();
     },
 
     removeClient: function(client) {
@@ -74,18 +67,63 @@ var DestinationMarker = defineClass({
       if (!this.clients.length) {
         this.clear();
       } else {
-        this.updateColor();
+        this.updateIcon();
+        this.updateTitle();
       }
     },
 
     setColor: function(color) {
       this.topClient().color = color;
-      this.updateColor();
+      this.updateIcon();
+    },
+
+    setDestinationLabel: function(destinationLabel) {
+      this.topClient().destinationLabel = destinationLabel;
+      this.updateTitle();
+    },
+
+    setLabel: function(label) {
+      var client = this.topClient();
+      client.label = label;
+      client.icon = null;
+      this.updateIcon();
+    },
+
+    setIcon: function(icon) {
+      var client = this.topClient();
+      client.icon = icon;
+      client.label = null;
+      this.updateIcon();
+    }
+  },
+
+  privates: {
+    refreshClickability: function() {
+      this.marker.setClickable(this.onClick.has());
+    },
+
+    topClient: function() {
+      return this.clients[this.clients.length - 1];
+    },
+
+    getIcon: function() {
+      return markerIcon(this.topClient());
+    },
+
+    updateIcon: function() {
+      this.marker.setIcon(this.getIcon());
+    },
+
+    updateTitle: function() {
+      var destLabel = this.topClient().destinationLabel;
+      this.marker.setTitle(destLabel?
+        strings.label(this.topClient().destinationLabel, this.title) :
+        this.title);
     }
   },
 
   events: [ 'onClick' ],
-  constants: [ 'marker', 'normalizedPlace' ],
+  constants: [ 'marker', 'place' ],
 
   /**
    * A note on clients: destination markers can be shared between multiple use
@@ -97,18 +135,23 @@ var DestinationMarker = defineClass({
    * when the client is removed the corresponding click handlers are removed as
    * well.
    */
-  init: function(maps, map, normalizedPlace, client, color) {
+  init: function(maps, map, place, client, color) {
     var self = this;
 
     this.map = map;
-    this.normalizedPlace = normalizedPlace;
+    this.place = place;
     this.clients = [{ client: client, color: color, listeners: [] }];
 
+    this.icon = null;
+    this.label = '';
+
+    this.title = place.getName();
+
     this.marker = new maps.Marker({
-      icon: markerIcon(color),
+      icon: this.getIcon(),
       map: map,
-      place: normalizedPlace.place,
-      title: deriveTitle(normalizedPlace),
+      place: place.getPlaceObject(),
+      title: this.title,
       clickable: false
     });
 
@@ -130,7 +173,7 @@ var DestinationMarker = defineClass({
       self.refreshClickability();
     });
 
-    maps.event.addListener(this.marker, 'click', $.proxy(this, 'onClick'));
+    maps.event.addListener(this.marker, 'click', this.onClick);
   }
 });
 

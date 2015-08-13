@@ -73,6 +73,57 @@ test('defineClass', function(t) {
   t.end();
 });
 
+test('member bindings', function(t) {
+  var seen;
+
+  var foreignContext = {
+    a: 0
+  };
+
+  var TestClass = defineClass({
+    publics: {
+      seePublic: function() {
+        seen = this.a++;
+      }
+    },
+    privates: {
+      seePrivate: function() {
+        seen = this.a++;
+      }
+    },
+    events: {
+      onPrivate: 'public'
+    },
+
+    init: function() {
+      this.a = 42;
+      this.onPrivate.add(this.seePrivate);
+
+      foreignContext.privateEvent = this.onPrivate;
+      foreignContext.privatePrivate = this.seePrivate;
+      foreignContext.privatePublic = this.seePublic;
+    }
+  });
+
+  var testInstance = new TestClass();
+
+  foreignContext.publicEvent = testInstance.onPrivate;
+  foreignContext.publicPublic = testInstance.seePublic;
+
+  foreignContext.privateEvent();
+  t.equal(seen, 42, 'event privately instance-bound');
+  foreignContext.privatePrivate();
+  t.equal(seen, 43, 'private method privately instance-bound');
+  foreignContext.privatePublic();
+  t.equal(seen, 44, 'public method privately instance-bound');
+  foreignContext.publicEvent();
+  t.equal(seen, 45, 'event publicly instance-bound');
+  foreignContext.publicPublic();
+  t.equal(seen, 46, 'public method publicly instance-bound');
+
+  t.end();
+});
+
 test('events object', function(t) {
   var TestClass = defineClass({
     init: function() {

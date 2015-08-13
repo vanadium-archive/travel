@@ -18,7 +18,7 @@ var TravelSync = defineClass({
         function(syncbase) {
           self.syncbase = syncbase;
           syncbase.onError.add(self.onError);
-          syncbase.onUpdate.add(self.processUpdates.bind(self));
+          syncbase.onUpdate.add(self.processUpdates);
         });
 
       return Promise.all([
