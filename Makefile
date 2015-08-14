@@ -84,3 +84,11 @@ clean:
 .PHONY: clean-tmp
 clean-tmp:
 	rm -rf tmp
+
+.PHONY: clean-syncbase
+clean-syncbase:
+	rm -rf tmp/syncbase*
+
+.PHONY: clean-creds
+clean-creds:
+	rm -rf tmp/creds

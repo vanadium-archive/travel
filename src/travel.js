@@ -280,31 +280,55 @@ var Travel = defineClass({
       }
     },
 
+    dismissInvite: function(owner, sender) {
+      var invite = this.invites[owner];
+      if (invite) {
+        invite.resolve(strings.invitationDismissed(sender, owner));
+        delete this.invites[owner];
+      }
+    },
+
     handleInvite: function(owner, recipient, sender) {
       var self = this;
       var invitationManager = this.sync.invitationManager;
       var me = invitationManager.getUsername();
 
       if (recipient === me) {
+        this.dismissInvite(owner, sender);
+
         var message = new Message();
         message.setType(Message.INFO);
         message.setHtml(strings.invitationReceived(sender, owner));
         message.setPromise(new Promise(function(resolve, reject) {
+          self.invites[owner] = {
+            resolve: resolve,
+            reject: reject
+          };
+
           message.$.find('a[name=accept]').click(function() {
             invitationManager.accept(owner).then(function() {
+              delete self.invites[owner];
               return strings.invitationAccepted(sender, owner);
             }).then(resolve, reject);
             return false;
           });
           message.$.find('a[name=decline]').click(function() {
             invitationManager.decline(owner).then(function() {
+              delete self.invites[owner];
               return strings.invitationDeclined(sender, owner);
             }).then(resolve, reject);
             return false;
           });
         }));
 
-        self.messages.push(message);
+        this.messages.push(message);
+      }
+    },
+
+    handleInviteDismiss: function(owner, recipient, sender) {
+      var me = this.sync.invitationManager.getUsername();
+      if (recipient === me) {
+        this.dismissInvite(owner, sender);
       }
     },
 
@@ -353,6 +377,8 @@ var Travel = defineClass({
 
     opts = opts || {};
     var vanadiumWrapper = opts.vanadiumWrapper || vanadiumWrapperDefault;
+
+    this.invites = {};
 
     var destinations = this.destinations = new Destinations();
     destinations.onAdd.add(this.handleDestinationAdd);
@@ -413,6 +439,7 @@ var Travel = defineClass({
     });
 
     sync.invitationManager.onInvite.add(this.handleInvite);
+    sync.invitationManager.onDismiss.add(this.handleInviteDismiss);
 
     messages.onMessage.add(this.handleUserMessage);
 

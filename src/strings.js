@@ -55,6 +55,10 @@ function getStrings(locale) {
       return 'Declined invite from ' + sender + ' to join ' +
         ownerOfTrip(sender, owner) + ' trip.';
     },
+    invitationDismissed: function(sender, owner) {
+      return sender + ' has invited you to join ' + ownerOfTrip(sender, owner) +
+        ' trip. (Expired)';
+    },
     invitationReceived: function(sender, owner) {
       return text(sender + ' has invited you to join ' +
         ownerOfTrip(sender, owner) + ' trip. ') +

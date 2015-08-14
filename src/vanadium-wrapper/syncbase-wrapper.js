@@ -116,11 +116,16 @@ var SyncbaseWrapper = defineClass({
             }
           };
 
-          fn.call(ops, ops).then(function(result) {
-            return cb(null, result);
-          }, function(err) {
-            return cb(err);
-          });
+          var p = fn.call(ops, ops);
+          if (p) {
+            p.then(function(result) {
+              return cb(null, result);
+            }, function(err) {
+              return cb(err);
+            });
+          } else {
+            cb();
+          }
         }));
     },
 
@@ -156,9 +161,10 @@ var SyncbaseWrapper = defineClass({
 
       var current = this.pull.current;
       if (!current) {
-        current = this.pull.current = this.pull().then(function(v) {
+        current = this.pull.current = this.pull().then(function(data) {
             self.pull.current = null;
-            return v;
+            self.onUpdate(data);
+            return data;
           }, function(err) {
             self.pull.current = null;
             throw err;
@@ -308,8 +314,7 @@ var SyncbaseWrapper = defineClass({
               debug.log('Syncbase: aborting refresh due to writes');
               resolve(self.pull()); //try/wait for idle again
             } else {
-              self.onUpdate(newData);
-              resolve();
+              resolve(newData);
             }
           }).on('data', function(row) {
             if (isHeader) {
@@ -371,10 +376,7 @@ var SyncbaseWrapper = defineClass({
       }
       setTimeout(self.watchLoop, 500);
     };
-    // TODO(rosswang): Right now sync fails if the initial db has a conflict, so
-    // for now add a delay so that sync happens before we start db actions
-    //process.nextTick(self.watchLoop);
-    setTimeout(self.watchLoop, 2000);
+    process.nextTick(self.watchLoop);
   }
 });
 

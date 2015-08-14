@@ -12,10 +12,6 @@ function debug(app) {
   global.$ = $;
 }
 
-debug.log = function(message) {
-  if (console.debug) {
-    console.debug(message);
-  }
-};
+debug.log = console.debug? console.debug.bind(console) : $.noop;
 
 module.exports = debug;
