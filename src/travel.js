@@ -22,6 +22,7 @@ var TravelSync = require('./travelsync');
 
 var vanadiumWrapperDefault = require('./vanadium-wrapper');
 
+var debug = require('./debug');
 var describeDestination = require('./describe-destination');
 var naming = require('./naming');
 var strings = require('./strings').currentLocale;
@@ -77,6 +78,14 @@ var CMD_REGEX = /\/(\S*)(?:\s+(.*))?/;
 
 var Travel = defineClass({
   publics: {
+    dump: function() {
+      this.sync.getData().then(function(data) {
+        debug.log(data);
+      }, function(err) {
+        console.error(err);
+      });
+    },
+
     error: function (err) {
       this.messages.push(Message.error(err));
     },
@@ -87,6 +96,32 @@ var Travel = defineClass({
         text: info,
         promise: promise
       }));
+    },
+
+    invite: function(recipient) {
+      var self = this;
+
+      var owner = this.sync.getActiveTripOwner();
+      if (owner) {
+        this.info(strings.sendingInvite(recipient),
+          this.sync.invitationManager.invite(recipient,
+              this.sync.getActiveTripOwner(), this.sync.getActiveTripId())
+            .then(function() {
+              var me = self.sync.invitationManager.getUsername();
+              self.sync.message({
+                type: Message.INFO,
+                text: strings.invitationSent(recipient, me)
+              });
+            }, function(err) {
+              if (err.id === 'v.io/v23/verror.NoServers') {
+                throw strings.notReachable(recipient);
+              } else {
+                throw err;
+              }
+            }));
+      } else {
+        this.error(strings['Trip is still initializing.']);
+      }
     }
   },
 
@@ -280,56 +315,39 @@ var Travel = defineClass({
       }
     },
 
-    dismissInvite: function(owner, sender) {
-      var invite = this.invites[owner];
-      if (invite) {
-        invite.resolve(strings.invitationDismissed(sender, owner));
-        delete this.invites[owner];
-      }
-    },
-
-    handleInvite: function(owner, recipient, sender) {
+    handleInvite: function(invitation) {
       var self = this;
-      var invitationManager = this.sync.invitationManager;
-      var me = invitationManager.getUsername();
 
-      if (recipient === me) {
-        this.dismissInvite(owner, sender);
+      var sender = invitation.sender;
+      var owner = invitation.owner;
+      var tripId = invitation.tripId;
 
-        var message = new Message();
-        message.setType(Message.INFO);
-        message.setHtml(strings.invitationReceived(sender, owner));
-        message.setPromise(new Promise(function(resolve, reject) {
-          self.invites[owner] = {
-            resolve: resolve,
-            reject: reject
-          };
-
-          message.$.find('a[name=accept]').click(function() {
-            invitationManager.accept(owner).then(function() {
-              delete self.invites[owner];
+      var message = new Message();
+      message.setType(Message.INFO);
+      message.setHtml(strings.invitationReceived(sender, owner));
+      message.setPromise(new Promise(function(resolve, reject) {
+        message.$.find('a[name=accept]').click(function() {
+          self.sync.joinTripSyncGroup(owner, tripId)
+            .then(invitation.delete)
+            .then(function() {
+              self.sync.watchForTrip(tripId);
               return strings.invitationAccepted(sender, owner);
             }).then(resolve, reject);
-            return false;
-          });
-          message.$.find('a[name=decline]').click(function() {
-            invitationManager.decline(owner).then(function() {
-              delete self.invites[owner];
-              return strings.invitationDeclined(sender, owner);
-            }).then(resolve, reject);
-            return false;
-          });
-        }));
+          return false;
+        });
+        message.$.find('a[name=decline]').click(function() {
+          invitation.delete().then(function() {
+            return strings.invitationDeclined(sender, owner);
+          }).then(resolve, reject);
+          return false;
+        });
 
-        this.messages.push(message);
-      }
-    },
+        invitation.onDismiss.add(function() {
+          resolve(strings.invitationDismissed(sender, owner));
+        });
+      }));
 
-    handleInviteDismiss: function(owner, recipient, sender) {
-      var me = this.sync.invitationManager.getUsername();
-      if (recipient === me) {
-        this.dismissInvite(owner, sender);
-      }
+      this.messages.push(message);
     },
 
     handleUserMessage: function(message, raw) {
@@ -377,8 +395,6 @@ var Travel = defineClass({
 
     opts = opts || {};
     var vanadiumWrapper = opts.vanadiumWrapper || vanadiumWrapperDefault;
-
-    this.invites = {};
 
     var destinations = this.destinations = new Destinations();
     destinations.onAdd.add(this.handleDestinationAdd);
@@ -439,7 +455,6 @@ var Travel = defineClass({
     });
 
     sync.invitationManager.onInvite.add(this.handleInvite);
-    sync.invitationManager.onDismiss.add(this.handleInviteDismiss);
 
     messages.onMessage.add(this.handleUserMessage);
 
@@ -524,23 +539,7 @@ var Travel = defineClass({
 
     this.commands = {
       invite: {
-        op: function(username) {
-          this.info(strings.sendingInvite(username),
-            this.sync.invitationManager.invite(username)
-              .then(function() {
-                var me = self.sync.invitationManager.getUsername();
-                self.sync.message({
-                  type: Message.INFO,
-                  text: strings.invitationSent(username, me)
-                });
-              }, function(err) {
-                if (err.id === 'v.io/v23/verror.NoServers') {
-                  throw strings.notReachable(username);
-                } else {
-                  throw err;
-                }
-              }));
-        }
+        op: this.invite
       },
 
       status: {

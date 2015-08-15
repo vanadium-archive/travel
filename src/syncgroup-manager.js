@@ -17,7 +17,7 @@ var SyncgroupManager = defineClass({
       return this.prereq.then(function() {
         var sg = self.syncbaseWrapper.syncGroup(self.sgAdmin, name);
 
-        var mgmt = vanadium.naming.join(self.mountNames.app, 'sgmt', name);
+        var mgmt = vanadium.naming.join(self.mountNames.app, 'sgmt');
         var spec = sg.buildSpec(prefixes, [mgmt]);
 
         /* TODO(rosswang): Right now, duplicate Syncbase creates on
@@ -30,8 +30,14 @@ var SyncgroupManager = defineClass({
             ['Read', {in: ['...']}],
             ['Resolve', {in: ['...']}]
           ]));
+        }).then(function() {
+          return sg;
         });
       });
+    },
+
+    destroySyncGroup: function(name) {
+      return this.syncbaseWrapper.syncGroup(this.sgAdmin, name).destroy();
     },
 
     joinSyncGroup: function(owner, name) {

@@ -83,6 +83,7 @@ function getStrings(locale) {
     },
     'Timeline': 'Timeline',
     'Travel Planner': 'Travel Planner',
+    'Trip is still initializing.' : 'Trip is still initializing.',
     'Unknown error': 'Unknown error'
   };
 }

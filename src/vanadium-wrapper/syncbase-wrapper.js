@@ -141,6 +141,10 @@ var SyncbaseWrapper = defineClass({
       return this.manageWrite(this.standardDelete(this.deleteFromSyncbase, k));
     },
 
+    getData: function() {
+      return this.data;
+    },
+
     /**
      * Since I/O is asynchronous, sparse, and fast, let's avoid concurrency/
      * merging with the local syncbase instance by only starting a refresh if
@@ -163,6 +167,7 @@ var SyncbaseWrapper = defineClass({
       if (!current) {
         current = this.pull.current = this.pull().then(function(data) {
             self.pull.current = null;
+            self.data = data;
             self.onUpdate(data);
             return data;
           }, function(err) {
@@ -194,6 +199,11 @@ var SyncbaseWrapper = defineClass({
         sg.create(self.context, spec, SG_MEMBER_INFO, chainable(cb));
       });
 
+      var destroy = promisify(function(cb) {
+        debug.log('Syncbase: destroy syncgroup ' + name);
+        sg.destroy(self.context, cb);
+      });
+
       var join = promisify(function(cb) {
         debug.log('Syncbase: join syncgroup ' + name);
         sg.join(self.context, SG_MEMBER_INFO, chainable(cb));
@@ -203,7 +213,10 @@ var SyncbaseWrapper = defineClass({
           sg.setSpec(self.context, spec, '', chainable(cb));
       });
 
-      //be explicit about arg lists because promisify is sensitive to extra args
+      /* Be explicit about arg lists because promisify is sensitive to extra
+       * args. i.e. even though destroy and join could just be fn refs, since
+       * they're made by promisify, wrap them in a fn that actually takes 0
+       * args. */
       sgp = {
         buildSpec: function(prefixes, mountTables) {
           return new syncbase.nosql.SyncGroupSpec({
@@ -214,12 +227,13 @@ var SyncbaseWrapper = defineClass({
               ['Resolve', {in: ['...']}],
               ['Debug', {in: ['...']}]
             ]),
-            prefixes: prefixes.map(function(p) { return 't:' + p; }),
+            prefixes: prefixes.map(function(p) { return 't:' + joinKey(p); }),
             mountTables: mountTables
           });
         },
 
         create: function(spec) { return create(spec); },
+        destroy: function() { return destroy(); },
         join: function() { return join(); },
         setSpec: function(spec) { return setSpec(spec); },
 

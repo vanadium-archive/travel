@@ -6,6 +6,7 @@ require('es6-shim');
 
 var $ = require('./util/jquery');
 var defineClass = require('./util/define-class');
+var debug = require('./debug');
 
 // TODO(rosswang): generalize this
 var ESC = {
@@ -31,42 +32,24 @@ function unescapeUsername(str) {
   });
 }
 
-function invitationKey(owner, recipient) {
-  return ['invitations', escapeUsername(owner), escapeUsername(recipient)];
+function invitationKey(recipient, owner, tripId) {
+  return [
+    'invitations',
+    escapeUsername(recipient),
+    escapeUsername(owner),
+    tripId
+  ];
 }
 
 var InvitationManager = defineClass({
   publics: {
-    accept: function(owner) {
-    },
-
-    decline: function(owner) {
-      return Promise.all([
-        this.syncbasePromise,
-        this.prereqs
-      ]).then(function(args) {
-        var syncbase = args[0];
-        var username = args[1].identity.username;
-
-        return syncbase.delete(invitationKey(owner, username));
-      });
-    },
-
-    getActiveInvite: function() {
-      return this.activeInvite;
-    },
-
-    invite: function(username) {
+    invite: function(recipient, owner, tripId) {
       var self = this;
 
       return this.groupManagerPromise.then(function(gm) {
-        return gm.joinSyncGroup(username, 'invitations').then(function() {
-          return self.prereqs;
-        }).then(function(prereqs) {
-          var owner = self.activeInvite || prereqs.identity.username;
-
-          return gm.syncbaseWrapper.put(invitationKey(owner, username),
-            prereqs.identity.username);
+        return gm.joinSyncGroup(recipient, 'invitations').then(function() {
+          return gm.syncbaseWrapper.put(invitationKey(recipient, owner, tripId),
+            self.username);
         });
       });
     },
@@ -77,54 +60,92 @@ var InvitationManager = defineClass({
   },
 
   privates: {
+    invitation: defineClass.innerClass({
+      publics: {
+        delete: function() {
+          var self = this;
+
+          var username = this.outer.username;
+          return this.outer.syncbasePromise.then(function(syncbase) {
+            return syncbase.delete(invitationKey(
+              username, self.owner, self.tripId));
+          });
+        }
+      },
+
+      constants: [ 'owner', 'tripId', 'sender' ],
+
+      events: {
+        onDismiss: 'memory once'
+      },
+
+      init: function(owner, tripId, sender, callbacks) {
+        this.owner = owner;
+        this.tripId = tripId;
+        this.sender = sender;
+        callbacks.dismiss = this.onDismiss;
+      }
+    }),
+
     processUpdates: function(data) {
       var self = this;
 
-      if (data.invitations) {
-        $.each(data.invitations, function(owner, record) {
+      var toMe;
+      if (data.invitations &&
+          (toMe = data.invitations[escapeUsername(this.username)])) {
+        $.each(toMe, function(owner, ownerRecords) {
           var ownerInvites = self.invitations[owner];
           if (!ownerInvites) {
             ownerInvites = self.invitations[owner] = {};
           }
 
-          $.each(record, function(recipient, sender) {
-            if (ownerInvites[recipient]) {
-              delete ownerInvites[recipient];
+          var uOwner;
+
+          $.each(ownerRecords, function(tripId, sender) {
+            var record = ownerInvites[tripId];
+            if (record) {
+              record.seen = true;
             } else {
-              self.onInvite(unescapeUsername(owner),
-                unescapeUsername(recipient), sender);
+              if (!uOwner) {
+                uOwner = unescapeUsername(owner);
+              }
+
+              debug.log('Received invite from ' + sender + ' to ' + uOwner +
+                ':' + tripId);
+
+              var callbacks = {};
+              var invite = self.invitation(uOwner, tripId, sender, callbacks);
+              ownerInvites[tripId] = {
+                invite: invite,
+                dismiss: callbacks.dismiss,
+                seen: true
+              };
+              self.onInvite(invite);
             }
           });
         });
       }
 
       if (this.invitations) {
-        $.each(this.invitations, function(owner, record) {
-          $.each(record, function(recipient, sender) {
-            self.onDismiss(unescapeUsername(owner),
-              unescapeUsername(recipient), sender);
+        $.each(this.invitations, function(owner, ownerRecords) {
+          $.each(ownerRecords, function(tripId, record) {
+            if (record.seen) {
+              delete record.seen;
+            } else {
+              delete ownerRecords[tripId];
+              record.dismiss();
+            }
           });
         });
       }
-
-      this.invitations = data.invitations || {};
     }
   },
 
   events: {
     /**
-     * @param owner the user who owns the trip.
-     * @param recipient the user invited to the trip.
-     * @param sender the user who sent the invitation.
+     * @param invitation
      */
     onInvite: '',
-
-    /**
-     * @param owner the user who owns the trip.
-     * @param recipient the user invited to the trip.
-     * @param sender the user who sent the invitation.
-     */
-    onDismiss: '',
 
     onError: 'memory'
   },
@@ -145,11 +166,13 @@ var InvitationManager = defineClass({
     this.invitations = {};
 
     prereqs.then(function(args) {
+      //this will have been set prior to groupManagerPromise completing
       self.username = args.identity.username;
     });
 
     groupManagerPromise.then(function(gm) {
-      gm.createSyncGroup('invitations', ['invitations'])
+      gm.createSyncGroup('invitations',
+          [['invitations', escapeUsername(self.username)]])
         .catch(self.onError);
     });
   }

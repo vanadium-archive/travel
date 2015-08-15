@@ -61,7 +61,15 @@ var TravelSync = defineClass({
     pushStatus: function() {
     },
 
-    setActiveTrip: function(tripId) {
+    getActiveTripId: function() {
+      return this.activeTripId;
+    },
+
+    getActiveTripOwner: function() {
+      return this.activeTripOwner;
+    },
+
+    setActiveTripId: function(tripId, pull) {
       var self = this;
 
       this.activeTripId = tripId;
@@ -71,7 +79,26 @@ var TravelSync = defineClass({
         syncbase.put(['user', 'tripMetadata', tripId, 'latestSwitch'],
           Date.now()).catch(self.onError);
 
-        return syncbase.refresh();
+        return pull? syncbase.refresh() : Promise.resolve();
+      });
+    },
+
+    getData: function() {
+      return this.startSyncbase.then(function(syncbase) {
+        return syncbase.getData();
+      });
+    },
+
+    /**
+     * Sets the active trip to the given trip ID after it is available.
+     */
+    watchForTrip: function(tripId) {
+      this.awaitedTripId = tripId;
+    },
+
+    joinTripSyncGroup: function(owner, tripId) {
+      return this.startSyncgroupManager.then(function(gm) {
+        return gm.joinSyncGroup(owner, 'trip-' + tripId);
       });
     }
   },
@@ -484,24 +511,68 @@ var TravelSync = defineClass({
         this.getDestinationIds(trip.destinations).length <= 1;
     },
 
+    manageTripSyncGroups: function(trips) {
+      var self = this;
+
+      //TODO(rosswang): maybe make this more intelligent, and handle ejection
+      if (trips) {
+        $.each(trips, function(tripId, trip) {
+          /* Join is idempotent, but repeatedly joining might be causing major,
+           * fatal sluggishness. TODO(rosswang): if this is not the case, maybe
+           * go ahead and poll. */
+          if (!self.joinedTrips.has(tripId) && trip.owner) {
+            self.joinedTrips.add(tripId);
+            self.joinTripSyncGroup(trip.owner, tripId).catch(self.onError);
+          }
+        });
+      }
+    },
+
     processTrips: function(userTripMetadata, trips) {
+      var self = this;
+
+      this.manageTripSyncGroups(trips);
+
       var trip;
+
+      if (this.awaitedTripId) {
+        this.setActiveTripId(this.awaitedTripId, false);
+        delete this.awaitedTripId;
+
+        /* Override latestSwitch this frame. (Subsequently syncbase will be up
+         * to date.) */
+        if (!userTripMetadata) {
+          userTripMetadata = {};
+        }
+        var activeTripMd = userTripMetadata[this.activeTripId];
+        if (!activeTripMd) {
+          activeTripMd = userTripMetadata[this.activeTripId] = {};
+        }
+        activeTripMd.latestSwitch = Date.now();
+      }
 
       if (this.activeTripId) {
         trip = trips && trips[this.activeTripId];
         if (!trip) {
           debug.log('Last active trip ' + this.activeTripId +
             ' is no longer present.');
-        } else if (this.isNascent(trip)) {
-          var establishedId = this.getDefaultTrip(userTripMetadata, trips);
-          if (establishedId && establishedId !== this.activeTripId &&
-              trips[establishedId]) {
-            this.deleteTrip(this.activeTripId);
+        } else {
+          var defaultId = this.getDefaultTrip(userTripMetadata, trips);
+          if (defaultId && defaultId !== this.activeTripId &&
+              trips[defaultId]) {
+            if (this.isNascent(trip)) {
+              this.deleteTrip(this.activeTripId);
+              debug.log('Replacing nascent trip ' + this.activeTripId +
+                ' with established trip ' + defaultId);
+            } else {
+              /* TODO(rosswang): for now, sync trip changes. This behavior may
+               * change. */
+              debug.log('Replacing active trip ' + this.activeTripId +
+                ' with most recent selection ' + defaultId);
+            }
 
-            debug.log('Replacing nascent trip ' + this.activeTripId +
-              ' with established trip ' + establishedId);
-            this.activeTripId = establishedId;
-            trip = trips[establishedId];
+            this.activeTripId = defaultId;
+            trip = trips[defaultId];
           }
         }
       }
@@ -512,12 +583,23 @@ var TravelSync = defineClass({
           debug.log('Setting active trip ' + this.activeTripId);
           trip = trips[this.activeTripId];
         } else {
-          this.activeTripId = uuid.v4();
-          debug.log('Creating new trip ' + this.activeTripId);
-          trip = {};
+          var tripId = this.activeTripId = uuid.v4();
+          debug.log('Creating new trip ' + tripId);
+          trip = {}; //don't initialize owner until the syncgroup is ready
+          this.startSyncgroupManager.then(function(gm) {
+            return self.createTripSyncGroup(gm, tripId)
+              .then(function(sg) {
+                return gm.syncbaseWrapper.put(['trips', tripId, 'owner'],
+                  self.invitationManager.getUsername()).then(function() {
+                    return sg;
+                  });
+              })
+              .catch(self.onError);
+          });
         }
       }
 
+      this.activeTripOwner = trip.owner;
       this.processMessages(trip.messages);
       this.processDestinations(trip.destinations);
     },
@@ -585,15 +667,20 @@ var TravelSync = defineClass({
     createPrimarySyncGroup: function(groupManager) {
       var self = this;
 
-      this.status.tripSyncGroup = 'creating';
-      return groupManager.createSyncGroup('trip', [''])
+      this.status.userSyncGroup = 'creating';
+      return groupManager.createSyncGroup('user', [[]])
         .then(function(sg) {
-          self.status.tripSyncGroup = 'created';
+          self.status.userSyncGroup = 'created';
           return sg;
         }, function(err) {
-          self.status.tripSyncGroup = 'failed';
+          self.status.usersSyncGroup = 'failed';
           throw err;
         });
+    },
+
+    createTripSyncGroup: function(groupManager, tripId) {
+      return groupManager.createSyncGroup('trip-' + tripId,
+        [['trips', tripId]]);
     }
   },
 
@@ -636,22 +723,23 @@ var TravelSync = defineClass({
     this.messages = {};
     this.destRecords = [];
     this.status = {};
+    this.joinedTrips = new Set();
 
     this.server = new vdlTravel.TravelSync();
     var startRpc = prereqs.then(this.serve);
     var startSyncbase = this.startSyncbase = prereqs.then(this.connectSyncbase);
-    var startSyncgroupManager = Promise
+    this.startSyncgroupManager = Promise
       .all([prereqs, startSyncbase])
       .then(function(args) {
         return self.createSyncgroupManager(args[0], args[1]);
       });
-    var createPrimarySyncGroup = startSyncgroupManager
+    var createPrimarySyncGroup = this.startSyncgroupManager
       .then(this.createPrimarySyncGroup);
 
     this.startup = Promise.all([
         startRpc,
         startSyncbase,
-        startSyncgroupManager,
+        this.startSyncgroupManager,
         createPrimarySyncGroup
       ]).then(function(values) {
         return {
@@ -662,7 +750,7 @@ var TravelSync = defineClass({
       });
 
     this.invitationManager = new InvitationManager(prereqs,
-      startSyncgroupManager);
+      this.startSyncgroupManager);
     this.invitationManager.onError.add(this.onError);
 
     this.handleDestinationPlaceChange = function() {
