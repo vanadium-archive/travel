@@ -29,19 +29,35 @@ main() {
   local -r TMP=tmp
   local -r CREDS=./tmp/creds/${creds-}
   local -r PORT=${port-4000}
-  local -r MOUNTTABLED_ADDR=":$((PORT+1))"
   local -r SYNCBASED_ADDR=":$((PORT))"
   local -r BLESSINGS=`principal dump --v23.credentials=${CREDS} -s=true`
+
+  if [ ${client-} ]; then
+    local -r MOUNTTABLED_ADDR=":$((PORT+1))"
+    mounttabled \
+      --v23.tcp.address=${MOUNTTABLED_ADDR} \
+      --v23.credentials=${CREDS} &
+
+    local -r SG_NAME=syncbase
+    local -r NS_ROOT=/${MOUNTTABLED_ADDR}
+  else
+    local -r RE="dev\.v\.io/u/(.*)"
+    if [[ ${BLESSINGS} =~ ${RE} ]]; then
+      local -r V_USER=${BASH_REMATCH[1]}
+    fi
+    local -r SG_NAME=users/${V_USER}/travel/sgadmin
+    local -r NS_ROOT=/ns.dev.v.io:8101
+  fi
+
+  echo "Starting syncbased on ${SYNCBASED_ADDR} mounted at ${NS_ROOT}/${SG_NAME}"
+
   mkdir -p $TMP
-  mounttabled \
-    --v23.tcp.address=${MOUNTTABLED_ADDR} \
-    --v23.credentials=${CREDS} &
   ./bin/syncbased \
     --v=5 \
     --alsologtostderr=false \
     --root-dir=${TMP}/syncbase_${PORT} \
-    --name=syncbase \
-    --v23.namespace.root=/${MOUNTTABLED_ADDR} \
+    --name=${SG_NAME} \
+    --v23.namespace.root=${NS_ROOT} \
     --v23.tcp.address=${SYNCBASED_ADDR} \
     --v23.credentials=${CREDS} \
     --v23.permissions.literal="{\"Admin\":{\"In\":[\"${BLESSINGS}\"]},\"Write\":{\"In\":[\"${BLESSINGS}\"]},\"Read\":{\"In\":[\"${BLESSINGS}\"]},\"Resolve\":{\"In\":[\"${BLESSINGS}\"]},\"Debug\":{\"In\":[\"...\"]}}"

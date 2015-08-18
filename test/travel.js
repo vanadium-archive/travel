@@ -23,7 +23,8 @@ test('domRoot', function(t) {
   new Travel({
     maps: mockMaps,
     vanadiumWrapper: mockVanadiumWrapper,
-    domRoot: root
+    domRoot: root,
+    syncbase: 'dummy'
   });
   /* jshint +W031 */
 
@@ -36,7 +37,8 @@ test('domRoot', function(t) {
 test('messages', function(t) {
   var travel = new Travel({
     maps: mockMaps,
-    vanadiumWrapper: mockVanadiumWrapper
+    vanadiumWrapper: mockVanadiumWrapper,
+    syncbase: 'dummy'
   });
 
   var $messages = $('.messages ul');

@@ -14,4 +14,6 @@ if (window.document) {
   $ = jq(window);
 }
 
+require('hoverintent-jqplugin')($);
+
 module.exports = $;

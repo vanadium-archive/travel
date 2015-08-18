@@ -17,6 +17,7 @@
     "es6-promisify": "^2.0.0",
     "es6-shim": "^0.33.0",
     "global": "^4.3.0",
+    "hoverintent-jqplugin": "^0.1.2",
     "htmlencode": "^0.0.4",
     "jquery": "^2.1.4",
     "lodash": "^3.10.1",

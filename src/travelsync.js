@@ -5,7 +5,6 @@
 require('es6-shim');
 
 var _ = require('lodash');
-var queryString = require('query-string');
 var uuid = require('uuid');
 var vanadium = require('vanadium');
 
@@ -637,14 +636,9 @@ var TravelSync = defineClass({
       var self = this;
       var vanadiumWrapper = args.vanadiumWrapper;
 
-      var sbName = queryString.parse(location.search).syncbase || 4000;
-      if ($.isNumeric(sbName)) {
-        sbName = '/localhost:' + sbName;
-      }
-
       this.status.syncbase = 'starting';
       return vanadiumWrapper
-        .syncbase(sbName)
+        .syncbase(this.syncbaseName)
         .then(function(syncbase) {
           syncbase.onError.add(self.onError);
           syncbase.onUpdate.add(self.processUpdates);
@@ -713,11 +707,13 @@ var TravelSync = defineClass({
    * @mapsDependencies an object with the following keys:
    *  maps
    *  placesService
+   * @syncbaseName name of the local SyncBase endpoint.
    */
-  init: function(prereqs, mapsDependencies) {
+  init: function(prereqs, mapsDependencies, syncbaseName) {
     var self = this;
 
     this.mapsDeps = mapsDependencies;
+    this.syncbaseName = syncbaseName;
 
     this.tripStatus = {};
     this.messages = {};

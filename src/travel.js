@@ -4,6 +4,7 @@
 
 require('es6-shim');
 
+var queryString = require('query-string');
 var raf = require('raf');
 
 var $ = require('./util/jquery');
@@ -424,10 +425,16 @@ var Travel = defineClass({
         };
       });
 
+    var sbName = opts.syncbase ||
+      queryString.parse(location.search).syncbase || 4000;
+    if ($.isNumeric(sbName)) {
+      sbName = '/localhost:' + sbName;
+    }
+
     var sync = this.sync = new TravelSync(vanadiumStartup, {
       maps: maps,
       placesService: map.createPlacesService()
-    });
+    }, sbName);
     sync.bindDestinations(destinations);
 
     this.info(strings['Connecting...'], sync.startup
@@ -515,8 +522,8 @@ var Travel = defineClass({
     var $toggleTimeline = this.$toggleTimeline = $('<div>')
       .addClass('toggle-timeline no-select collapsed')
       .text(strings['Timeline'])
-      .mouseenter(this.showTimeline)
       .click(this.collapseTimeline);
+    $toggleTimeline.hoverintent(this.showTimeline, $.noop);
 
     map.addControls(maps.ControlPosition.TOP_CENTER, messages.$);
     map.addControls(maps.ControlPosition.LEFT_TOP, $miniPanel);
