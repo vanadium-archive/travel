@@ -384,13 +384,13 @@ var SyncbaseWrapper = defineClass({
 
     // Start the watch loop to periodically poll for changes from sync.
     // TODO(rosswang): Remove this once we have client watch.
-    this.watchLoop = function() {
+    function watchLoop() {
       if (!self.pull.current) {
         self.refresh().catch(self.onError);
       }
-      setTimeout(self.watchLoop, 500);
-    };
-    process.nextTick(self.watchLoop);
+      setTimeout(watchLoop, 500);
+    }
+    process.nextTick(watchLoop);
   }
 });
 

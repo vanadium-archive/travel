@@ -7,6 +7,7 @@ var defineClass = require('../util/define-class');
 
 var SyncbaseWrapper = require('./syncbase-wrapper');
 
+//ms
 var NAME_TTL = 5000;
 var NAME_REFRESH = 2500;
 

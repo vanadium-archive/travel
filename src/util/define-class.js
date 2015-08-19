@@ -78,12 +78,12 @@ function defineClass(def) {
       $.extend(ifc, def.statics);
     }
 
-    if (def.init) {
-      def.init.apply(pthis, arguments);
-    }
-
     if (def.publics) {
       polyBind(ifc, pthis, def.publics, true);
+    }
+
+    if (def.init) {
+      def.init.apply(pthis, arguments);
     }
 
     if (def.constants) {

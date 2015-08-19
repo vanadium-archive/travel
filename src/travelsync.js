@@ -195,19 +195,29 @@ var TravelSync = defineClass({
       }
     }),
 
+    manageWrite: function(promise) {
+      var writes = this.writes;
+      writes.add(promise);
+      promise.then(function() {
+        writes.delete(promise);
+      }, function() {
+        writes.delete(promise);
+      });
+    },
+
     batch: function(fn) {
-      this.startSyncbase.then(function(syncbase) {
+      this.manageWrite(this.startSyncbase.then(function(syncbase) {
         return syncbase.batch(fn);
-      }).catch(this.onError);
+      }).catch(this.onError));
     },
 
     nonBatched: function(fn) {
       var self = this; //not really necessary but semantically correct
       var fnArgs = Array.prototype.slice.call(arguments, 1);
-      this.startSyncbase.then(function(syncbase) {
+      this.manageWrite(this.startSyncbase.then(function(syncbase) {
         fnArgs.splice(0, 0, syncbase);
         return fn.apply(self, fnArgs);
-      }).catch(this.onError);
+      }).catch(this.onError));
     },
 
     handleDestinationAdd: function (destination) {
@@ -316,7 +326,15 @@ var TravelSync = defineClass({
     },
 
     unmarshal: function(x) {
-      return x && JSON.parse(x);
+      if (!x) {
+        return x;
+      }
+
+      if (typeof x === 'object') {
+        throw new TypeError('Unexpected persisted object ' + JSON.stringify(x));
+      }
+
+      return JSON.parse(x);
     },
 
     truncateDestinations: function(targetLength) {
@@ -440,10 +458,6 @@ var TravelSync = defineClass({
         });
 
         if (this.destRecords.length > ids.length) {
-          /* TODO(rosswang): There is an edge case where this happens due to
-           * user interaction even though normally pulls are blocked while
-           * writes are outstanding. This can probably also happen on startup.
-           * Debug this or better yet make it go away. */
           this.truncateDestinations(ids.length);
         }
       }
@@ -604,7 +618,13 @@ var TravelSync = defineClass({
     },
 
     processUpdates: function(data) {
-      this.processTrips(data.user && data.user.tripMetadata, data.trips);
+      /* Although SyncbaseWrapper gates on something similar, we may block on
+       * SyncBase initialization and don't want initial pulls overwriting local
+       * updates queued for writing. We could actually do it here only, but
+       * having it in SyncbaseWrapper as well is semantically correct. */
+      if (!this.writes.size) {
+        this.processTrips(data.user && data.user.tripMetadata, data.trips);
+      }
     },
 
     hasValidUpstream: function() {
@@ -720,6 +740,7 @@ var TravelSync = defineClass({
     this.destRecords = [];
     this.status = {};
     this.joinedTrips = new Set();
+    this.writes = new Set();
 
     this.server = new vdlTravel.TravelSync();
     var startRpc = prereqs.then(this.serve);

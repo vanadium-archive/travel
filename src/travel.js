@@ -80,11 +80,17 @@ var CMD_REGEX = /\/(\S*)(?:\s+(.*))?/;
 var Travel = defineClass({
   publics: {
     dump: function() {
-      this.sync.getData().then(function(data) {
+      return this.sync.getData().then(function(data) {
         debug.log(data);
+        return data;
       }, function(err) {
         console.error(err);
+        throw err;
       });
+    },
+
+    status: function() {
+      return this.sync.status;
     },
 
     error: function (err) {
@@ -97,6 +103,10 @@ var Travel = defineClass({
         text: info,
         promise: promise
       }));
+    },
+
+    getActiveTripId: function() {
+      return this.sync.getActiveTripId();
     },
 
     invite: function(recipient) {
@@ -553,7 +563,7 @@ var Travel = defineClass({
         op: function() {
           this.messages.push(new Message({
             type: Message.INFO,
-            html: strings.status(JSON.stringify(this.sync.status, null, 2))
+            html: strings.status(JSON.stringify(this.status(), null, 2))
           }));
         }
       }

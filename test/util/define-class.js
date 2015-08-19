@@ -326,3 +326,24 @@ test('late binding of event members', function(t) {
 
   t.end();
 });
+
+test('constructor ifc', function(t) {
+  var TestClass = defineClass({
+    publics: {
+      getValue: function() {
+        return 'hi';
+      }
+    },
+
+    init: function() {
+      t.equal(this.ifc.getValue(), 'hi',
+        'public methods bound before constructor');
+    }
+  });
+
+  /* jshint -W031 */ //testing in-constructor visibility
+  new TestClass();
+  /* jshint +W031 */
+
+  t.end();
+});

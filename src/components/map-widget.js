@@ -390,14 +390,14 @@ var MapWidget = defineClass({
       }
     },
 
-    centerOnCurrentLocation: function() {
+    centerOnCurrentLocation: function(navigator) {
       var self = this;
       var maps = this.maps;
       var map = this.map;
 
       // https://developers.google.com/maps/documentation/javascript/examples/map-geolocation
-      if (global.navigator && global.navigator.geolocation) {
-        global.navigator.geolocation.getCurrentPosition(function(position) {
+      if (navigator && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function(position) {
           var latLng = new maps.LatLng(
             position.coords.latitude, position.coords.longitude);
           map.setCenter(latLng);
@@ -496,9 +496,11 @@ var MapWidget = defineClass({
     var self = this;
 
     var maps = opts.maps || global.google.maps;
+    var navigator = opts.navigator || global.navigator;
+
     this.maps = maps;
     this.navigator = opts.navigator || global.navigator;
-    this.geocoder = new maps.Geocoder();
+    this.geocoder = opts.geocoder || new maps.Geocoder();
     this.directionsService = new maps.DirectionsService();
 
     this.$ = $('<div>').addClass('map-canvas');
@@ -522,7 +524,7 @@ var MapWidget = defineClass({
       self.onBoundsChange(map.getBounds());
     });
 
-    this.centerOnCurrentLocation();
+    this.centerOnCurrentLocation(navigator);
   }
 });
 
