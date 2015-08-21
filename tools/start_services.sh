@@ -6,6 +6,8 @@
 # Expects credentials in tmp/creds, generated as follows:
 #
 # make creds
+#
+# Optionally, the creds variable can specify a subdirectory.
 
 set -euo pipefail
 trap kill_child_processes INT TERM EXIT
@@ -33,13 +35,9 @@ main() {
   local -r BLESSINGS=`principal dump --v23.credentials=${CREDS} -s=true`
 
   if [ ${client-} ]; then
-    local -r MOUNTTABLED_ADDR=":$((PORT+1))"
-    mounttabled \
-      --v23.tcp.address=${MOUNTTABLED_ADDR} \
-      --v23.credentials=${CREDS} &
+    local -r SG_NAME=dummy
 
-    local -r SG_NAME=syncbase
-    local -r NS_ROOT=/${MOUNTTABLED_ADDR}
+    echo "Starting syncbased on ${SYNCBASED_ADDR}"
   else
     local -r RE="dev\.v\.io/u/(.*)"
     if [[ ${BLESSINGS} =~ ${RE} ]]; then
@@ -47,9 +45,10 @@ main() {
     fi
     local -r SG_NAME=users/${V_USER}/travel/sgadmin
     local -r NS_ROOT=/ns.dev.v.io:8101
-  fi
+    local -r NS_OPT="--v23.namespace.root=${NS_ROOT}"
 
-  echo "Starting syncbased on ${SYNCBASED_ADDR} mounted at ${NS_ROOT}/${SG_NAME}"
+    echo "Starting syncbased on ${SYNCBASED_ADDR} mounted at ${NS_ROOT}/${SG_NAME}"
+  fi
 
   mkdir -p $TMP
   ./bin/syncbased \
@@ -57,7 +56,7 @@ main() {
     --alsologtostderr=false \
     --root-dir=${TMP}/syncbase_${PORT} \
     --name=${SG_NAME} \
-    --v23.namespace.root=${NS_ROOT} \
+    ${NS_OPT-} \
     --v23.tcp.address=${SYNCBASED_ADDR} \
     --v23.credentials=${CREDS} \
     --v23.permissions.literal="{\"Admin\":{\"In\":[\"${BLESSINGS}\"]},\"Write\":{\"In\":[\"${BLESSINGS}\"]},\"Read\":{\"In\":[\"${BLESSINGS}\"]},\"Resolve\":{\"In\":[\"${BLESSINGS}\"]},\"Debug\":{\"In\":[\"...\"]}}"

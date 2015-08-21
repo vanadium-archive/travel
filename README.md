@@ -35,29 +35,22 @@ changes using the watch tool:
 Local instances require a blessed syncbase instance. To attain blessings and
 start syncbase, use:
 
-    make bootstrap
-
-or
-
-    make boostrap port=<syncbase port>
+    make bootstrap [creds=<creds subdir>] [port=<syncbase port>]
 
 Related targets:
 
-    make creds
-    make syncbase [port=<syncbase port>]
+    make creds [creds=<creds subdir>]
+    make syncbase [creds=<creds subdir>] [port=<syncbase port>]
+
+You can similarly run with fresh creds or syncbase data via:
+
+    make clean-creds
+    make clean-syncbase
 
 To run a local dev server use:
 
-    make start
-
-If you would like to change the port that is used:
-
-    make start port=<port>
+    make start [port=<port>]
 
 To connect to a syncbase instance other than the default, navigate to:
-
-    localhost:<server port>
-
-or
 
     localhost:<server port>/?syncbase=<syncbase port>
