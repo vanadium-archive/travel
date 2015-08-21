@@ -364,7 +364,7 @@ var SyncbaseWrapper = defineClass({
 
   events: {
     onError: 'memory',
-    onUpdate: 'memory'
+    onUpdate: '',
   },
 
   init: function(context, db, mountName) {

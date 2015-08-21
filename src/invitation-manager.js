@@ -150,13 +150,9 @@ var InvitationManager = defineClass({
     onError: 'memory'
   },
 
-  /**
-   * @param prereqs promise of { identity, mountNames, vanadiumWrapper }
-   */
-  init: function(prereqs, groupManagerPromise) {
+  init: function(usernamePromise, groupManagerPromise) {
     var self = this;
 
-    this.prereqs = prereqs;
     this.syncbasePromise = groupManagerPromise.then(function(gm) {
       gm.syncbaseWrapper.onUpdate.add(self.processUpdates);
       return gm.syncbaseWrapper;
@@ -165,9 +161,9 @@ var InvitationManager = defineClass({
 
     this.invitations = {};
 
-    prereqs.then(function(args) {
+    usernamePromise.then(function(username) {
       //this will have been set prior to groupManagerPromise completing
-      self.username = args.identity.username;
+      self.username = username;
     });
 
     groupManagerPromise.then(function(gm) {
