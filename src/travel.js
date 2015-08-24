@@ -338,16 +338,14 @@ var Travel = defineClass({
       message.setHtml(strings.invitationReceived(sender, owner));
       message.setPromise(new Promise(function(resolve, reject) {
         message.$.find('a[name=accept]').click(function() {
-          self.sync.joinTripSyncGroup(owner, tripId)
-            .then(invitation.delete)
-            .then(function() {
-              self.sync.watchForTrip(tripId);
-              return strings.invitationAccepted(sender, owner);
-            }).then(resolve, reject);
+          invitation.accept().then(function() {
+            self.sync.watchForTrip(tripId);
+            return strings.invitationAccepted(sender, owner);
+          }).then(resolve, reject);
           return false;
         });
         message.$.find('a[name=decline]').click(function() {
-          invitation.delete().then(function() {
+          invitation.decline().then(function() {
             return strings.invitationDeclined(sender, owner);
           }).then(resolve, reject);
           return false;

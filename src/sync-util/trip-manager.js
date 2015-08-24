@@ -21,17 +21,6 @@ var TripManager = defineClass({
   },
 
   publics: {
-    createTripSyncGroup: function(groupManager, tripId) {
-      return groupManager.createSyncGroup('trip-' + tripId,
-        [['trips', tripId]]);
-    },
-
-    joinTripSyncGroup: function(owner, tripId) {
-      return this.startSyncgroupManager.then(function(gm) {
-        return gm.joinSyncGroup(owner, 'trip-' + tripId);
-      });
-    },
-
     /**
      * Sets the active trip to the given trip ID after it is available.
      */
@@ -95,8 +84,6 @@ var TripManager = defineClass({
     processTrips: function(userTripMetadata, trips) {
       var self = this;
 
-      this.manageTripSyncGroups(trips);
-
       var trip;
 
       if (this.awaitedTripId) {
@@ -149,17 +136,10 @@ var TripManager = defineClass({
         } else {
           var tripId = this.activeTripId = uuid.v4();
           debug.log('Creating new trip ' + tripId);
-          trip = {}; //don't initialize owner until the syncgroup is ready
-          this.startSyncgroupManager.then(function(gm) {
-            return Promise.all([
-                self.createTripSyncGroup(gm, tripId),
-                self.usernamePromise
-              ]).then(function(args) {
-                return gm.syncbaseWrapper.put(['trips', tripId, 'owner'],
-                  args[1]).then(function() {
-                    return args[0];
-                  });
-              })
+          trip = {};
+          this.startSyncgroupManager.then(function(sgm) {
+            return sgm.syncbaseWrapper.put(['trips', tripId, 'owner'],
+                sgm.identity.username)
               .catch(self.onError);
           });
         }
@@ -203,29 +183,12 @@ var TripManager = defineClass({
 
     isNascent: function(trip) {
       return this.getTripLength(trip) <= 1;
-    },
-
-    manageTripSyncGroups: function(trips) {
-      var self = this;
-
-      //TODO(rosswang): maybe make this more intelligent, and handle ejection
-      if (trips) {
-        $.each(trips, function(tripId, trip) {
-          /* Join is idempotent, but repeatedly joining might be causing major,
-           * fatal sluggishness. TODO(rosswang): if this is not the case, maybe
-           * go ahead and poll. */
-          if (!self.joinedTrips.has(tripId) && trip.owner) {
-            self.joinedTrips.add(tripId);
-            self.joinTripSyncGroup(trip.owner, tripId).catch(self.onError);
-          }
-        });
-      }
     }
   },
 
   init: function(usernamePromise, deferredSyncbaseWrapper,
       startSyncgroupManager) {
-    this.usernamePromise =  usernamePromise;
+    this.usernamePromise = usernamePromise;
     this.sbw = deferredSyncbaseWrapper;
     this.startSyncgroupManager = startSyncgroupManager;
     this.joinedTrips = new Set();

@@ -7,6 +7,7 @@ require('es6-shim');
 var promisify = require('es6-promisify');
 var syncbase = require('syncbase');
 var vanadium = require('vanadium');
+var verror = vanadium.verror;
 
 var defineClass = require('../util/define-class');
 
@@ -17,12 +18,10 @@ var debug = require('../debug');
  */
 function setUp(context, app, db) {
   function nonfatals(err) {
-    switch (err.id) {
-      case 'v.io/v23/verror.Exist':
-        console.info(err.msg);
-        return;
-      default:
-        throw err;
+    if (err instanceof verror.ExistError) {
+      console.info(err.msg);
+    } else {
+      throw err;
     }
   }
 
@@ -92,7 +91,7 @@ var SyncbaseWrapper = defineClass({
 
   publics: {
     /**
-     * @param seq a function executing the batch operations, receiving as its
+     * @param fn a function executing the batch operations, receiving as its
      *  `this` context and first parameter the batch operation methods
      *  (put, delete), each of which returns a promise. The callback must return
      *  the overarching promise.
@@ -205,12 +204,20 @@ var SyncbaseWrapper = defineClass({
       });
 
       var join = promisify(function(cb) {
-        debug.log('Syncbase: join syncgroup ' + name);
         sg.join(self.context, SG_MEMBER_INFO, chainable(cb));
       });
 
-      var setSpec = promisify(function(spec, cb) {
-          sg.setSpec(self.context, spec, '', chainable(cb));
+      var getSpec = promisify(function(cb) {
+        sg.getSpec(self.context, function(err, spec, version) {
+          cb(err, {
+            spec: spec,
+            version: version
+          });
+        });
+      });
+
+      var setSpec = promisify(function(spec, version, cb) {
+        sg.setSpec(self.context, spec, version, chainable(cb));
       });
 
       /* Be explicit about arg lists because promisify is sensitive to extra
@@ -218,14 +225,14 @@ var SyncbaseWrapper = defineClass({
        * they're made by promisify, wrap them in a fn that actually takes 0
        * args. */
       sgp = {
-        buildSpec: function(prefixes, mountTables) {
+        buildSpec: function(prefixes, mountTables, admin, initialPermissions) {
           return new syncbase.nosql.SyncGroupSpec({
             perms: new Map([
-              ['Admin', {in: ['...']}],
-              ['Read', {in: ['...']}],
-              ['Write', {in: ['...']}],
-              ['Resolve', {in: ['...']}],
-              ['Debug', {in: ['...']}]
+              ['Admin', {in: [admin]}],
+              ['Read', {in: initialPermissions}],
+              ['Write', {in: initialPermissions}],
+              ['Resolve', {in: initialPermissions}],
+              ['Debug', {in: [admin]}]
             ]),
             prefixes: prefixes.map(function(p) { return 't:' + joinKey(p); }),
             mountTables: mountTables
@@ -235,17 +242,28 @@ var SyncbaseWrapper = defineClass({
         create: function(spec) { return create(spec); },
         destroy: function() { return destroy(); },
         join: function() { return join(); },
-        setSpec: function(spec) { return setSpec(spec); },
+        getSpec: function() { return getSpec(); },
+        setSpec: function(spec, version) { return setSpec(spec, version); },
+        changeSpec: function(fn) {
+          return sgp.getSpec().then(function(versionedSpec) {
+            var spec = versionedSpec.spec;
+            return sgp.setSpec(fn(spec) || spec, versionedSpec.version)
+              .catch(function(err) {
+                if (err instanceof verror.VersionError) {
+                  return sgp.changeSpec(fn);
+                } else {
+                  throw err;
+                }
+              });
+          });
+        },
 
         createOrJoin: function(spec) {
           return sgp.create(spec)
             .catch(function(err) {
-              if (err.id === 'v.io/v23/verror.Exist') {
+              if (err instanceof verror.ExistError) {
                 debug.log('Syncbase: syncgroup ' + name + ' already exists.');
-                return sgp.join()
-                  .then(function() {
-                    return sgp.setSpec(spec);
-                  });
+                return sgp.join();
               } else {
                 throw err;
               }
@@ -254,10 +272,8 @@ var SyncbaseWrapper = defineClass({
 
         joinOrCreate: function(spec) {
           return sgp.join()
-            .then(function() {
-              return sgp.setSpec(spec);
-            }, function(err) {
-              if (err.id === 'v.io/v23/verror.NoExist') {
+            .catch(function(err) {
+              if (err instanceof verror.NoExistError) {
                 debug.log('Syncbase: syncgroup ' + name + ' does not exist.');
                 return sgp.createOrJoin(spec);
               } else {
@@ -350,7 +366,7 @@ var SyncbaseWrapper = defineClass({
             }
           }).on('error', reject);
         }).catch(function(err) {
-          if (err.id === 'v.io/v23/verror.Internal') {
+          if (err instanceof verror.InternalError) {
             console.error(err);
           } else {
             throw err;

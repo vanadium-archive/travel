@@ -57,7 +57,8 @@ var VanadiumWrapper = defineClass({
                 return mount(true);
               }
             }, function(err) {
-              if (err.id === 'v.io/v23/naming.nameDoesntExist') {
+              // TODO(rosswang): does this work?
+              if (err instanceof vanadiumDefault.naming.ErrNoSuchName) {
                 return mount(true);
               } else {
                 throw err;

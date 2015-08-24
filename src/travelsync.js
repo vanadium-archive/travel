@@ -113,16 +113,17 @@ var TravelSync = defineClass({
       return gm;
     },
 
-    createPrimarySyncGroup: function(groupManager) {
+    createPrimarySyncGroup: function(syncgroupManager) {
       var self = this;
 
       this.status.userSyncGroup = 'creating';
-      return groupManager.createSyncGroup('user', [[]])
+      return syncgroupManager.createSyncGroup('user', [[]],
+        [syncgroupManager.identity.username])
         .then(function(sg) {
           self.status.userSyncGroup = 'created';
           return sg;
         }, function(err) {
-          self.status.usersSyncGroup = 'failed';
+          self.status.userSyncGroup = 'failed';
           throw err;
         });
     }
@@ -208,8 +209,7 @@ var TravelSync = defineClass({
         };
       });
 
-    this.invitationManager = new InvitationManager(usernamePromise,
-      this.startSyncgroupManager);
+    this.invitationManager = new InvitationManager(this.startSyncgroupManager);
     this.invitationManager.onError.add(this.onError);
   }
 });

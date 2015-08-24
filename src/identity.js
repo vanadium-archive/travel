@@ -18,6 +18,10 @@ function Identity(accountName) {
   this.entityName = this.username + '/' + this.deviceName;
 }
 
+Identity.blessingForUsername = function(username) {
+  return 'dev.v.io/u/' + username;
+};
+
 function autoUsername() {
   return uuid.v4();
 }

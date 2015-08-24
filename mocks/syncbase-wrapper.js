@@ -4,6 +4,8 @@
 
 require('es6-shim');
 
+var verror = require('vanadium').verror;
+
 var $ = require('../src/util/jquery');
 var defineClass = require('../src/util/define-class');
 
@@ -185,30 +187,56 @@ var MockSyncbaseWrapper = defineClass({
 
     syncGroup: function(sgAdmin, name) {
       var repo = this.repo;
+      var sgp;
 
-      var sgp = {
+      function sgFactory(spec) {
+        return function() {
+          var sg = new Set();
+          sg.prefixes = spec;
+          return sg;
+        };
+      }
+
+      function errNoExist() {
+        return new verror.NoExistError(null, 'SyncGroup does not exist.');
+      }
+
+      function getSg() {
+        return syncgroups[sgAdmin + '$' + name];
+      }
+
+      function joinSg(factory) {
+        var sgKey = sgAdmin + '$' + name;
+        var sg = syncgroups[sgKey];
+        if (!sg) {
+          sg = syncgroups[sgKey] = factory();
+        }
+        sg.add(repo);
+
+        return Promise.resolve(sgp);
+      }
+
+      sgp = {
         buildSpec: function(prefixes) {
           return prefixes;
         },
 
+        changeSpec: function(){
+          return getSg()? Promise.resolve() : Promise.reject(errNoExist());
+        },
+
         join: function() {
-          var sgKey = sgAdmin + '$' + name;
-          var sg = syncgroups[sgKey];
-          sg.add(repo);
-          return Promise.resolve(sgp);
+          return joinSg(function() {
+            throw errNoExist();
+          });
+        },
+
+        createOrJoin: function(spec) {
+          return joinSg(sgFactory(spec));
         },
 
         joinOrCreate: function(spec) {
-          var sgKey = sgAdmin + '$' + name;
-          var sg = syncgroups[sgKey];
-          if (!sg) {
-            sg = syncgroups[sgKey] = new Set();
-          }
-
-          sg.prefixes = spec;
-          sg.add(repo);
-
-          return Promise.resolve(sgp);
+          return joinSg(sgFactory(spec));
         }
       };
 

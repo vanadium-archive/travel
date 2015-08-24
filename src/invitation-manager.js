@@ -4,6 +4,8 @@
 
 require('es6-shim');
 
+var verror = require('vanadium').verror;
+
 var $ = require('./util/jquery');
 var defineClass = require('./util/define-class');
 var debug = require('./debug');
@@ -41,16 +43,23 @@ function invitationKey(recipient, owner, tripId) {
   ];
 }
 
+function tripSgName(tripId) {
+  return 'trip-' + tripId;
+}
+
 var InvitationManager = defineClass({
   publics: {
     invite: function(recipient, owner, tripId) {
       var self = this;
 
-      return this.groupManagerPromise.then(function(gm) {
-        return gm.joinSyncGroup(recipient, 'invitations').then(function() {
-          return gm.syncbaseWrapper.put(invitationKey(recipient, owner, tripId),
-            self.username);
-        });
+      return this.sgmPromise.then(function(sgm) {
+        return Promise.all([
+            self.addTripCollaborator(owner, tripId, recipient),
+            sgm.joinSyncGroup(recipient, 'invitations')
+          ]).then(function() {
+            return sgm.syncbaseWrapper.put(
+              invitationKey(recipient, owner, tripId), self.username);
+          });
       });
     },
 
@@ -62,6 +71,17 @@ var InvitationManager = defineClass({
   privates: {
     invitation: defineClass.innerClass({
       publics: {
+        accept: function() {
+          return this.outer.joinTripSyncGroup(this.owner, this.tripId)
+            .then(this.delete);
+        },
+
+        decline: function() {
+          return this.delete();
+        }
+      },
+
+      privates: {
         delete: function() {
           var self = this;
 
@@ -87,12 +107,61 @@ var InvitationManager = defineClass({
       }
     }),
 
+    createTripSyncGroup: function(tripId, initialCollaborators) {
+      return this.sgmPromise.then(function(sgm) {
+        return sgm.createSyncGroup(tripSgName(tripId), [['trips', tripId]],
+          [sgm.identity.username].concat(initialCollaborators));
+      });
+    },
+
+    joinTripSyncGroup: function(owner, tripId) {
+      return this.sgmPromise.then(function(sgm) {
+        return sgm.joinSyncGroup(owner, tripSgName(tripId));
+      });
+    },
+
+    addTripCollaborator: function(owner, tripId, collaborator) {
+      var self = this;
+
+      return this.sgmPromise.then(function(sgm) {
+        return sgm.addCollaborator(owner, tripSgName(tripId), collaborator)
+          .catch(function(err) {
+            if (err instanceof verror.NoExistError &&
+                owner === self.username) {
+              return self.createTripSyncGroup(tripId, collaborator);
+            } else {
+              throw err;
+            }
+          });
+      });
+    },
+
+    manageTripSyncGroups: function(trips) {
+      var self = this;
+
+      //TODO(rosswang): maybe make this more intelligent, and handle ejection
+      if (trips) {
+        $.each(trips, function(tripId, trip) {
+          if (trip.owner) {
+            self.joinTripSyncGroup(trip.owner, tripId)
+              .catch(function(err) {
+                if (!(err instanceof verror.NoExistError)) {
+                  throw err;
+                }
+              }).catch(self.onError);
+          }
+        });
+      }
+    },
+
     processUpdates: function(data) {
       var self = this;
 
-      var toMe;
-      if (data.invitations &&
-          (toMe = data.invitations[escapeUsername(this.username)])) {
+      this.manageTripSyncGroups(data.trips);
+
+      var toMe = data.invitations &&
+        data.invitations[escapeUsername(this.username)];
+      if (toMe) {
         $.each(toMe, function(owner, ownerRecords) {
           var ownerInvites = self.invitations[owner];
           if (!ownerInvites) {
@@ -150,25 +219,21 @@ var InvitationManager = defineClass({
     onError: 'memory'
   },
 
-  init: function(usernamePromise, groupManagerPromise) {
+  init: function(sgmPromise) {
     var self = this;
 
-    this.syncbasePromise = groupManagerPromise.then(function(gm) {
-      gm.syncbaseWrapper.onUpdate.add(self.processUpdates);
-      return gm.syncbaseWrapper;
+    this.syncbasePromise = sgmPromise.then(function(sgm) {
+      self.username = sgm.identity.username;
+      sgm.syncbaseWrapper.onUpdate.add(self.processUpdates);
+      return sgm.syncbaseWrapper;
     });
-    this.groupManagerPromise = groupManagerPromise;
+    this.sgmPromise = sgmPromise;
 
     this.invitations = {};
 
-    usernamePromise.then(function(username) {
-      //this will have been set prior to groupManagerPromise completing
-      self.username = username;
-    });
-
-    groupManagerPromise.then(function(gm) {
-      gm.createSyncGroup('invitations',
-          [['invitations', escapeUsername(self.username)]])
+    sgmPromise.then(function(sgm) {
+      sgm.createSyncGroup('invitations',
+          [['invitations', escapeUsername(self.username)]], ['...'])
         .catch(self.onError);
     });
   }

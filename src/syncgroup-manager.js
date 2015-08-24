@@ -7,21 +7,23 @@ require('es6-shim');
 var vanadium = require('vanadium');
 
 var defineClass = require('./util/define-class');
+var Identity = require('./identity');
 var naming = require('./naming');
 
 var SyncgroupManager = defineClass({
   publics: {
-    createSyncGroup: function(name, prefixes) {
+    createSyncGroup: function(name, prefixes, initialCollaborators) {
       var self = this;
 
-      var sg = self.syncbaseWrapper.syncGroup(self.sgAdmin, name);
+      var sg = this.syncbaseWrapper.syncGroup(self.sgAdmin, name);
 
-      var mgmt = vanadium.naming.join(self.mountNames.app, 'sgmt');
-      var spec = sg.buildSpec(prefixes, [mgmt]);
+      var mgmt = vanadium.naming.join(this.mountNames.app, 'sgmt');
+      var spec = sg.buildSpec(prefixes, [mgmt], this.identity.account,
+        initialCollaborators.map(function(username) {
+          return username === '...'?
+            username : Identity.blessingForUsername(username);
+        }));
 
-      /* TODO(rosswang): Right now, duplicate Syncbase creates on
-       * different Syncbase instances results in siloed SyncGroups.
-       * Revisit this logic once it merges properly. */
       return sg.joinOrCreate(spec).then(function() {
         // TODO(rosswang): this is a hack to make the SyncGroup joinable
         return self.vanadiumWrapper.setPermissions(mgmt, new Map([
@@ -39,13 +41,26 @@ var SyncgroupManager = defineClass({
     },
 
     joinSyncGroup: function(owner, name) {
-      var sg = this.syncbaseWrapper.syncGroup(
-        vanadium.naming.join(naming.appMount(owner), 'sgadmin'), name);
-      return sg.join();
+      return this.getForeignSyncGroup(owner, name).join();
+    },
+
+    addCollaborator: function(owner, sgName, username) {
+      var blessing = Identity.blessingForUsername(username);
+      return this.getForeignSyncGroup(owner, sgName)
+        .changeSpec(function(spec) {
+          ['Read', 'Write', 'Resolve'].forEach(function(perm) {
+            spec.perms.get(perm).in.push(blessing);
+          });
+        });
     }
   },
 
   privates: {
+    getForeignSyncGroup: function(owner, name) {
+      return this.syncbaseWrapper.syncGroup(
+        vanadium.naming.join(naming.appMount(owner), 'sgadmin'), name);
+    },
+
     advertise: function() {
       var basicPerms = new Map([
         ['Admin', {in: [this.identity.account]}],
@@ -63,7 +78,7 @@ var SyncgroupManager = defineClass({
     }
   },
 
-  constants: [ 'sgAdmin', 'syncbaseWrapper' ],
+  constants: [ 'identity', 'sgAdmin', 'syncbaseWrapper' ],
 
   events: {
     onError: 'memory'
