@@ -35,7 +35,7 @@ main() {
   local -r BLESSINGS=`principal dump --v23.credentials=${CREDS} -s=true`
 
   if [ ${client-} ]; then
-    local -r SG_NAME=dummy
+    local -r SG_NAME=dummy # a value is required or syncgroups aren't joinable (bug)
 
     echo "Starting syncbased on ${SYNCBASED_ADDR}"
   else
@@ -57,6 +57,7 @@ main() {
     --root-dir=${TMP}/syncbase_${PORT} \
     --name=${SG_NAME} \
     ${NS_OPT-} \
+    --v23.proxy=/ns.dev.v.io:8101/proxy \
     --v23.tcp.address=${SYNCBASED_ADDR} \
     --v23.credentials=${CREDS} \
     --v23.permissions.literal="{\"Admin\":{\"In\":[\"${BLESSINGS}\"]},\"Write\":{\"In\":[\"${BLESSINGS}\"]},\"Read\":{\"In\":[\"${BLESSINGS}\"]},\"Resolve\":{\"In\":[\"${BLESSINGS}\"]},\"Debug\":{\"In\":[\"...\"]}}"
