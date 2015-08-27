@@ -85,6 +85,10 @@ var MapWidget = defineClass({
       this.ensureGeomsVisible(geoms);
     },
 
+    fitBounds: function(bounds) {
+      this.map.fitBounds(bounds);
+    },
+
     ensureVisible: function(place) {
       this.ensureGeomsVisible([place.getGeometry()]);
     },

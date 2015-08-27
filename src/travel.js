@@ -17,6 +17,7 @@ var Messages = require('./components/messages');
 var Message = require('./components/message');
 var Timeline = require('./components/timeline');
 
+var CastingManager = require('./casting-manager');
 var Destinations = require('./destinations');
 var Identity = require('./identity');
 var TravelSync = require('./travelsync');
@@ -465,6 +466,9 @@ var Travel = defineClass({
     });
 
     sync.onError.add(error);
+    sync.onPossibleNearbyDevices.add(function() {
+      self.info(strings.castingTooltip);
+    });
     sync.onMessages.add(function(messages) {
       self.messages.push.apply(self.messages, messages);
     });
@@ -542,6 +546,22 @@ var Travel = defineClass({
     $domRoot.append($timelineContainer, map.$);
 
     this.initMiniFeedback();
+
+    var castingManager = new CastingManager(sync);
+    castingManager.makeCastable($timelineContainer, {
+      spec: {
+        panelName: 'timeline'
+      }
+    });
+    castingManager.onAmbiguousCast.add(function(related, unknown) {
+      console.debug('ambiguous cast');
+      console.debug(related);
+      console.debug(unknown);
+    });
+    castingManager.onNoNearbyDevices.add(function() {
+      self.error(strings.noNearbyDevices);
+    });
+    castingManager.onError.add(error);
 
     destinations.add();
     miniDestinationSearch.focus();

@@ -8,11 +8,14 @@ var vanadium = require('vanadium');
 
 var defineClass = require('./util/define-class');
 
+var naming = require('./naming');
+
 var SyncgroupManager = require('./syncgroup-manager');
 var InvitationManager = require('./invitation-manager');
 
 var DeferredSbWrapper = require('./sync-util/deferred-sb-wrapper');
 var DestinationSync = require('./sync-util/destination-sync');
+var DeviceSync = require('./sync-util/device-sync');
 var MessageSync = require('./sync-util/message-sync');
 var TripManager = require('./sync-util/trip-manager');
 
@@ -57,11 +60,40 @@ var TravelSync = defineClass({
 
     joinTripSyncGroup: function(owner, tripId) {
       return this.tripManager.joinTripSyncGroup(owner, tripId);
+    },
+
+    getRelatedDevices: function(direction) {
+      return this.deviceSync.getRelatedDevices(direction);
+    },
+
+    getUnconnectedCastTargets: function() {
+      return this.deviceSync.getUnconnectedCastTargets();
+    },
+
+    getPossibleCastTargets: function() {
+      return this.deviceSync.getPossibleCastTargets();
+    },
+
+    relateDevice: function(owner, device, relativePosition) {
+      return this.deviceSync.relate(owner, device, relativePosition);
+    },
+
+    cast: function(owner, device, spec) {
+      var self = this;
+      return this.clientPromise(naming.rpcMount(owner, device))
+        .then(function(s) {
+          return self.vanadiumWrapperPromise.then(function(vanadiumWrapper) {
+            return s.cast(vanadiumWrapper.context(),
+              new vdlTravel.CastSpec(spec));
+          });
+        });
     }
   },
 
   privates: {
     processUpdates: function(data) {
+      this.deviceSync.processDevices(data.devices);
+
       this.tripManager.processTrips(data.user && data.user.tripMetadata,
         data.trips);
 
@@ -72,14 +104,16 @@ var TravelSync = defineClass({
       this.tripManager.setUpstream();
     },
 
+    getRpcEndpoint: function(args) {
+      return vanadium.naming.join(args.mountNames.device, 'rpc');
+    },
+
     serve: function(args) {
       var self = this;
-      var mountNames = args.mountNames;
       var vanadiumWrapper = args.vanadiumWrapper;
 
       this.status.rpc = 'starting';
-      return vanadiumWrapper.server(
-          vanadium.naming.join(mountNames.device, 'rpc'), this.server)
+      return vanadiumWrapper.server(args.mountNames.rpc, this.server)
         .then(function(server) {
           self.status.rpc = 'ready';
           return server;
@@ -126,6 +160,22 @@ var TravelSync = defineClass({
           self.status.userSyncGroup = 'failed';
           throw err;
         });
+    },
+
+    handleCast: function(ctx, serverCall, spec) {
+      console.debug('Cast target for ' + spec.panelName);
+    },
+
+    clientPromise: function(endpoint) {
+      var clientPromise = this.clients[endpoint];
+      if (!clientPromise) {
+        clientPromise = this.clients[endpoint] = this.vanadiumWrapperPromise
+          .then(function(vanadiumWrapper) {
+            return vanadiumWrapper.client(endpoint);
+          });
+      }
+
+      return clientPromise;
     }
   },
 
@@ -143,6 +193,12 @@ var TravelSync = defineClass({
     onPlaceChange: '',
 
     onError: 'memory',
+
+    /**
+     * Triggered when devices are discovered (possibly) nearby, where none were
+     * present before.
+     */
+    onPossibleNearbyDevices: '',
 
     /**
      * @param messages array of {content, timestamp} pair objects.
@@ -164,11 +220,16 @@ var TravelSync = defineClass({
     var self = this;
 
     this.syncbaseName = syncbaseName;
+    this.maps = mapsDependencies.maps;
 
     this.tripStatus = {};
     this.status = {};
+    this.clients = {};
 
-    this.server = new vdlTravel.TravelSync();
+    this.server = new vdlTravel.Travel();
+    this.server.cast = function(ctx, serverCall, spec) {
+      self.handleCast(ctx, serverCall, spec);
+    };
     var startRpc = prereqs.then(this.serve);
     var startSyncbase = prereqs.then(this.connectSyncbase);
 
@@ -184,6 +245,9 @@ var TravelSync = defineClass({
     var createPrimarySyncGroup = this.startSyncgroupManager
       .then(this.createPrimarySyncGroup);
 
+    this.vanadiumWrapperPromise = prereqs.then(function(args) {
+      return args.vanadiumWrapper;
+    });
     var usernamePromise = prereqs.then(function(args) {
       return args.identity.username;
     });
@@ -195,6 +259,12 @@ var TravelSync = defineClass({
       mapsDependencies, sbw, this.tripManager);
 
     this.messageSync.onMessages.add(this.onMessages);
+
+    this.deviceSync = new DeviceSync(mapsDependencies.maps,
+        prereqs.then(function(args) { return args.identity; }),
+        self.sbw);
+    this.deviceSync.onError.add(this.onError);
+    this.deviceSync.onPossibleNearbyDevices.add(this.onPossibleNearbyDevices);
 
     this.startup = Promise.all([
         startRpc,

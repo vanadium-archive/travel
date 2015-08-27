@@ -28,6 +28,12 @@ var DeferredSbWrapper = defineClass({
       return this.sbPromise.then(function(syncbase) {
         return syncbase.getData();
       });
+    },
+
+    pull: function(prefix) {
+      return this.sbPromise.then(function(syncbase) {
+        return syncbase.pull(prefix);
+      });
     }
   },
 

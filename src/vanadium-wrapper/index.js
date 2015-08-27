@@ -89,6 +89,10 @@ var VanadiumWrapper = defineClass({
         this.runtime.getContext(), name, perms);
     },
 
+    context: function() {
+      return this.runtime.getContext();
+    },
+
     /**
      * @param endpoint Vanadium name
      * @returns a promise resolving to a client or rejecting with an error.

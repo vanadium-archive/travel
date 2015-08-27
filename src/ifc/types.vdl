@@ -4,46 +4,7 @@
 
 package ifc
 
-type Location complex64
-type Waypoint Location
-type LegId int16
-type WaypointId int16
-type SuggestionId int16
-
-type Destination struct {
-  // TODO; may or may not have an embedded Waypoint
+type CastSpec struct {
+  PanelName string
 }
 
-/*
- * A leg of travel. Each leg has one destination of significance but may be
- * routed through any number of waypoints.
- */
-type Leg struct {
-  Waypoints []Waypoint
-  // Logically, the last waypoint. However, it contains metadata that other
-  // waypoints do not (see Destination struct).
-  Destination Destination
-  // TODO: timeline data
-}
-
-type TripPlan []Leg
-
-type TripStatus struct {
-  CurrentLeg LegId
-  // ID of the next waypoint on the current leg. The leg destination is
-  // considered the last waypoint.
-  NextWaypoint WaypointId
-}
-
-/*
- * Status actually varies by agent/user.
- */
-type TravellerStatus struct {
-  TripStatus TripStatus
-  Location Location
-}
-
-type Trip struct {
-  Plan TripPlan
-  Status map[string]TravellerStatus
-}

@@ -10,35 +10,13 @@ var $ = require('./util/jquery');
 var defineClass = require('./util/define-class');
 var debug = require('./debug');
 
-// TODO(rosswang): generalize this
-var ESC = {
-  '_': '_',
-  '.': 'd',
-  '@': 'a'
-};
-
-var INV = {};
-$.each(ESC, function(k, v) {
-  INV[v] = k;
-});
-
-function escapeUsername(str) {
-  return str.replace(/_|\.|@/g, function(m) {
-    return '_' + ESC[m];
-  });
-}
-
-function unescapeUsername(str) {
-  return str.replace(/_(.)/g, function(m, p1) {
-    return INV[p1];
-  });
-}
+var SyncbaseWrapper = require('./vanadium-wrapper/syncbase-wrapper');
 
 function invitationKey(recipient, owner, tripId) {
   return [
     'invitations',
-    escapeUsername(recipient),
-    escapeUsername(owner),
+    SyncbaseWrapper.escapeKeyElement(recipient),
+    SyncbaseWrapper.escapeKeyElement(owner),
     tripId
   ];
 }
@@ -160,7 +138,7 @@ var InvitationManager = defineClass({
       this.manageTripSyncGroups(data.trips);
 
       var toMe = data.invitations &&
-        data.invitations[escapeUsername(this.username)];
+        data.invitations[SyncbaseWrapper.escapeKeyElement(this.username)];
       if (toMe) {
         $.each(toMe, function(owner, ownerRecords) {
           var ownerInvites = self.invitations[owner];
@@ -176,7 +154,7 @@ var InvitationManager = defineClass({
               record.seen = true;
             } else {
               if (!uOwner) {
-                uOwner = unescapeUsername(owner);
+                uOwner = SyncbaseWrapper.unescapeKeyElement(owner);
               }
 
               debug.log('Received invite from ' + sender + ' to ' + uOwner +
@@ -233,7 +211,8 @@ var InvitationManager = defineClass({
 
     sgmPromise.then(function(sgm) {
       sgm.createSyncGroup('invitations',
-          [['invitations', escapeUsername(self.username)]], ['...'])
+          [['invitations', SyncbaseWrapper.escapeKeyElement(self.username)]],
+          ['...'])
         .catch(self.onError);
     });
   }

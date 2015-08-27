@@ -26,6 +26,9 @@ function getStrings(locale) {
     add: function(object) {
       return 'Add ' + object.toLowerCase();
     },
+    castingTooltip: 'To cast a panel to a nearby device, middle-click and ' +
+      'drag (or left-right-click and drag) the panel towards the target ' +
+      'device.',
     change: function(object) {
       return 'Change ' + object.toLowerCase();
     },
@@ -69,6 +72,7 @@ function getStrings(locale) {
         sender + ' invited ' + recipient + ' to join the trip.' :
         'Invited ' + recipient + ' to join the trip.';
     },
+    noNearbyDevices: 'Cannot cast: no nearby devices.',
     'Not connected': 'Not connected',
     notReachable: function(username) {
       return username + ' is not reachable or is not a Travel Planner user.';

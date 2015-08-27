@@ -30,6 +30,7 @@ var UI_SLA = 50;
  */
 var STABLE_SLA = 2500;
 var SYNC_SLA = MockSyncbaseWrapper.SYNC_SLA;
+var DEVICE_DISCOVERY_SLA = 5000;
 
 function cleanDom() {
   $('body').empty();
@@ -227,6 +228,14 @@ function assertSameSingletonMarkers(t, instanceA, instanceB) {
   t.deepEqual(simplifyPlace(p2), simplifyPlace(p1), 'markers synced');
 }
 
+function getMessage(instance, index) {
+  var $messageItems = instance.$domRoot.find('.messages ul').children();
+  if (index < 0) {
+    index = $messageItems.length + index;
+  }
+  return $($messageItems[index]);
+}
+
 test('two devices', function(t) {
   failOnError(t);
 
@@ -238,6 +247,16 @@ test('two devices', function(t) {
     assertSameSingletonMarkers(t, ad1, ad2);
     t.equal(ad2.travel.getActiveTripId(), ad1.travel.getActiveTripId(),
       'trips synced');
+
+    setTimeout(afterDisco, DEVICE_DISCOVERY_SLA);
+  }
+
+  function afterDisco() {
+    t.equal(getMessage(ad2, -1).text(),
+      'To cast a panel to a nearby device, middle-click and drag ' +
+      '(or left-right-click and drag) the panel towards the target device.',
+      'casting prompt');
+
     t.end();
   }
 });
@@ -298,7 +317,7 @@ test('new user', function(t) {
   timeoutify(Promise.all([
     startWithGeo(t, bd1, 'bob', PLACES.GOLDEN_GATE),
     startWithGeo(t, bd2, 'bob', PLACES.SPACE_NEEDLE)
-  ]), t, afterSync, SYNC_SLA);
+  ]), t, afterSync, DEVICE_DISCOVERY_SLA);
 
   function afterSync() {
     t.equal(bd1.map.markers.size, 1, 'one marker (no sync with Alice)');
@@ -306,14 +325,6 @@ test('new user', function(t) {
     t.end();
   }
 });
-
-function getMessage(instance, index) {
-  var $messageItems = instance.$domRoot.find('.messages ul').children();
-  if (index < 0) {
-    index = $messageItems.length + index;
-  }
-  return $($messageItems[index]);
-}
 
 function invite(senderInstance, recipientUser) {
   senderInstance.$domRoot.find('.send input')
@@ -326,7 +337,7 @@ test('join established trip', function(t) {
 
   invite(ad2, 'bob');
 
-  t.equal(getMessage(ad2, 1).text(),
+  t.equal(getMessage(ad2, 2).text(),
     'Inviting bob@foogle.com to join the trip...',
     'local invite message');
 
@@ -374,7 +385,7 @@ test('join established trip', function(t) {
   }
 
   function afterInvite2() {
-    $invite = getMessage(bd2, 2);
+    $invite = getMessage(bd2, 3);
     $invite.find('a[name=accept]').click();
 
     setTimeout(afterAccept, UI_SLA);
@@ -389,7 +400,7 @@ test('join established trip', function(t) {
   }
 
   function afterAcceptSync() {
-    t.equal(getMessage(bd1, 2).text(),
+    t.equal(getMessage(bd1, 3).text(),
       'alice@foogle.com has invited you to join a trip. (Expired)',
       'user accept message');
 

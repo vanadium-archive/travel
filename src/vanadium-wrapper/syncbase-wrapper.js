@@ -9,6 +9,7 @@ var syncbase = require('syncbase');
 var vanadium = require('vanadium');
 var verror = vanadium.verror;
 
+var $ = require('../util/jquery');
 var defineClass = require('../util/define-class');
 
 var debug = require('../debug');
@@ -76,6 +77,21 @@ function recursiveSet(root, key, value) {
 
 var SG_MEMBER_INFO = new syncbase.nosql.SyncGroupMemberInfo();
 
+// TODO(rosswang): generalize this
+// If this is updated, the regex in escapeKeyElement needs updating too.
+var ESC = {
+  '_': '_',
+  '.': 'd',
+  '@': 'a',
+  '/': 's',
+  ':': 'c'
+};
+
+var INV = {};
+$.each(ESC, function(k, v) {
+  INV[v] = k;
+});
+
 var SyncbaseWrapper = defineClass({
   statics: {
     start: function(context, mountName) {
@@ -85,6 +101,18 @@ var SyncbaseWrapper = defineClass({
 
       return setUp(context, app, db).then(function() {
         return new SyncbaseWrapper(context, db, mountName);
+      });
+    },
+
+    escapeKeyElement: function(str) {
+      return str.replace(/_|\.|@|\/|:/g, function(m) {
+        return '_' + ESC[m];
+      });
+    },
+
+    unescapeKeyElement: function(str) {
+      return str.replace(/_(.)/g, function(m, p1) {
+        return INV[p1];
       });
     }
   },
@@ -176,6 +204,75 @@ var SyncbaseWrapper = defineClass({
       }
 
       return current;
+    },
+
+    /**
+     * @see refresh
+     */
+    pull: function(prefix) {
+      var self = this;
+
+      function repull() {
+        return self.pull(prefix);
+      }
+
+      if (this.writes.size) {
+        debug.log('Syncbase: deferring refresh due to writes in progress');
+        return Promise.all(this.writes)
+          .then(repull, repull);
+
+      } else {
+        this.dirty = false;
+
+        return new Promise(function(resolve, reject) {
+          var newData = {};
+          var abort = false;
+
+          var isHeader = true;
+
+          var query = 'select k, v from t';
+          if (prefix) {
+            query += ' where k like "' + joinKey(prefix) + '%"';
+          }
+
+          self.db.exec(self.context, query, function(err) {
+            if (err) {
+              reject(err);
+            } else if (abort) {
+              //no-op; promise has already been resolved.
+            } else if (self.dirty) {
+              debug.log('Syncbase: aborting refresh due to writes');
+              resolve(repull()); //try/wait for idle again
+            } else {
+              resolve(newData);
+            }
+          }).on('data', function(row) {
+            if (isHeader) {
+              isHeader = false;
+              return;
+            }
+
+            if (abort) {
+              //no-op
+            } else if (self.dirty) {
+              abort = true;
+              debug.log('Syncbase: aborting refresh due to writes');
+              resolve(repull()); //try/wait for idle again
+              /* It would be nice to abort this stream for real, but we can't.
+               * Leave this handler attached but no-oping to drain the stream.
+               */
+            } else {
+              recursiveSet(newData, row[0], row[1]);
+            }
+          }).on('error', reject);
+        }).catch(function(err) {
+          if (err instanceof verror.InternalError) {
+            console.error(err);
+          } else {
+            throw err;
+          }
+        });
+      }
     },
 
     syncGroup: function(sgAdmin, name) {
@@ -313,66 +410,6 @@ var SyncbaseWrapper = defineClass({
       k = joinKey(k);
       debug.log('Syncbase: delete ' + k);
       return fn(this.context, syncbase.nosql.rowrange.prefix(k));
-    },
-
-    /**
-     * @see refresh
-     */
-    pull: function() {
-      var self = this;
-
-      if (this.writes.size) {
-        debug.log('Syncbase: deferring refresh due to writes in progress');
-        return Promise.all(this.writes)
-          .then(this.pull, this.pull);
-
-      } else {
-        this.dirty = false;
-
-        return new Promise(function(resolve, reject) {
-          var newData = {};
-          var abort = false;
-
-          var isHeader = true;
-
-          self.db.exec(self.context, 'select k, v from t', function(err) {
-            if (err) {
-              reject(err);
-            } else if (abort) {
-              //no-op; promise has already been resolved.
-            } else if (self.dirty) {
-              debug.log('Syncbase: aborting refresh due to writes');
-              resolve(self.pull()); //try/wait for idle again
-            } else {
-              resolve(newData);
-            }
-          }).on('data', function(row) {
-            if (isHeader) {
-              isHeader = false;
-              return;
-            }
-
-            if (abort) {
-              //no-op
-            } else if (self.dirty) {
-              abort = true;
-              debug.log('Syncbase: aborting refresh due to writes');
-              resolve(self.pull()); //try/wait for idle again
-              /* It would be nice to abort this stream for real, but we can't.
-               * Leave this handler attached but no-oping to drain the stream.
-               */
-            } else {
-              recursiveSet(newData, row[0], row[1]);
-            }
-          }).on('error', reject);
-        }).catch(function(err) {
-          if (err instanceof verror.InternalError) {
-            console.error(err);
-          } else {
-            throw err;
-          }
-        });
-      }
     }
   },
 
