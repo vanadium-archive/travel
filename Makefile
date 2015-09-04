@@ -35,7 +35,7 @@ node_modules: package.json
 	@npm install
 	@ # TODO(rosswang): remove these two
 	@npm install $(V23_ROOT)/release/javascript/core/
-	@npm install $(V23_ROOT)/roadmap/javascript/syncbase/
+	@npm install $(V23_ROOT)/release/javascript/syncbase/
 	@touch $@ # if npm does nothing, we don't want to keep trying
 
 server-root:

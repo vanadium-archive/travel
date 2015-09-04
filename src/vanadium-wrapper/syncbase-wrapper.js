@@ -29,7 +29,8 @@ function setUp(context, app, db) {
     })
     .catch(nonfatals)
     .then(function() {
-      return promisify(db.createTable.bind(db))(context, 't', {});
+      var table = db.table('t');
+      return promisify(table.create.bind(table))(context, {});
     })
     .catch(nonfatals);
 }
