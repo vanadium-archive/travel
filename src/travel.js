@@ -16,6 +16,8 @@ var MapWidget = require('./components/map-widget');
 var Messages = require('./components/messages');
 var Message = require('./components/message');
 var Timeline = require('./components/timeline');
+var TimelineClient = require('./components/timeline-client');
+var TimelineService = require('./components/timeline-server');
 
 var CastingManager = require('./casting-manager');
 var Destinations = require('./destinations');
@@ -29,41 +31,6 @@ var describeDestination = require('./describe-destination');
 var naming = require('./naming');
 var strings = require('./strings').currentLocale;
 
-function bindControlToDestination(control, destination) {
-  function updateOrdinal() {
-    handleDestinationOrdinalUpdate(control, destination);
-  }
-
-  if (destination) {
-    destination.onPlaceChange.add(control.setPlace);
-    destination.onSelect.add(control.select);
-    destination.onDeselect.add(control.deselect);
-    destination.onOrdinalChange.add(updateOrdinal);
-    control.setPlace(destination.getPlace());
-    /* Since these controls are 1:1 with destinations, we don't want to stay in
-     * a state where the control has invalid text but the destination is still
-     * valid; that would be confusing to the user (e.g. abandoned query string
-     * "restaurants" for destination 4 Privet Drive.) */
-    control.onPlaceChange.add(destination.setPlace);
-  }
-
-  updateOrdinal();
-
-  if (destination && destination.isSelected()) {
-    control.select();
-  } else {
-    control.deselect();
-  }
-
-  return destination? function unbind() {
-    destination.onPlaceChange.remove(control.setPlace);
-    destination.onSelect.remove(control.select);
-    destination.onDeselect.remove(control.deselect);
-    destination.onOrdinalChange.remove(updateOrdinal);
-    control.onPlaceChange.remove(destination.setPlace);
-  } : $.noop;
-}
-
 function buildStatusErrorStringMap(statusClass, stringGroup) {
   var dict = {};
   $.each(statusClass, function(name, value) {
@@ -73,7 +40,8 @@ function buildStatusErrorStringMap(statusClass, stringGroup) {
 }
 
 function handleDestinationOrdinalUpdate(control, destination) {
-  control.setPlaceholder(describeDestination.descriptionOpenEnded(destination));
+  return control.setPlaceholder(
+    describeDestination.descriptionOpenEnded(destination));
 }
 
 var CMD_REGEX = /\/(\S*)(?:\s+(.*))?/;
@@ -134,70 +102,151 @@ var Travel = defineClass({
       } else {
         this.error(strings['Trip is still initializing.']);
       }
+    },
+
+    castTimeline: function() {
+
     }
   },
 
   privates: {
-    handleDestinationAdd: function(destination) {
-      var map = this.map;
-
-      var control = this.timeline.add(destination.getIndex());
-      bindControlToDestination(control, destination);
-
-      control.setSearchBounds(map.getBounds());
-      map.onBoundsChange.add(control.setSearchBounds);
-
-      control.onFocus.add(function() {
-        if (!destination.isSelected()) {
-          map.closeActiveInfoWindow();
-          destination.select();
-        }
-      });
-
-      control.onSearch.add(function(results) {
-        /* There seems to be a bug where if you click a search suggestion (for
-         * a query, not a resolved location) in autocomplete, the input box
-         * under it gets clicked and focused... I haven't been able to figure
-         * out why. */
-        control.focus();
-
-        map.showSearchResults(results);
-      });
-
-      if (!destination.hasNext()) {
-        this.timeline.disableAdd();
-        var oldLast = this.timeline.get(-2);
-        if (oldLast) {
-          this.unbindLastDestinationSearchEvents(oldLast);
-        }
-        this.bindLastDestinationSearchEvents(control);
-      }
-
-      this.bindMiniFeedback(destination);
-
-      return {
-        destination: destination,
-        control: control
+    trap: function(asyncMethod) {
+      var self = this;
+      return function() {
+        return asyncMethod.apply(this, arguments).catch(self.error);
       };
     },
 
-    handleDestinationRemove: function(destination) {
-      var index = destination.getIndex();
-      this.unbindLastDestinationSearchEvents(this.timeline.remove(index));
+    bindControlToDestination: function(control, destination) {
+      var asyncs = [];
 
-      if (index >= this.destinations.count()) {
-        var lastControl = this.timeline.get(-1);
-        if (lastControl) {
-          this.bindLastDestinationSearchEvents(lastControl);
-          this.handleLastPlaceChange(lastControl.getPlace());
-        }
+      function updateOrdinalAsync() {
+        return handleDestinationOrdinalUpdate(control, destination);
       }
-      //TODO(rosswang): reselect?
+
+      var setPlace, select, deselect, updateOrdinal;
+
+      if (destination) {
+        setPlace = this.trap(control.setPlace);
+        select = this.trap(control.select);
+        deselect = this.trap(control.deselect);
+        updateOrdinal = this.trap(updateOrdinalAsync);
+
+        destination.onPlaceChange.add(setPlace);
+        destination.onSelect.add(select);
+        destination.onDeselect.add(deselect);
+        destination.onOrdinalChange.add(updateOrdinal);
+        asyncs.push(control.setPlace(destination.getPlace()));
+        /* Since these controls are 1:1 with destinations, we don't want to stay
+         * in a state where the control has invalid text but the destination is
+         * still valid; that would be confusing to the user (e.g. abandoned
+         * query string "restaurants" for destination 4 Privet Drive.) */
+        control.onPlaceChange.add(destination.setPlace);
+      }
+
+      asyncs.push(updateOrdinalAsync());
+
+      if (destination && destination.isSelected()) {
+        asyncs.push(control.select());
+      } else {
+        asyncs.push(control.deselect());
+      }
+
+      var unbind = destination? function() {
+        destination.onPlaceChange.remove(setPlace);
+        destination.onSelect.remove(select);
+        destination.onDeselect.remove(deselect);
+        destination.onOrdinalChange.remove(updateOrdinal);
+        control.onPlaceChange.remove(destination.setPlace);
+      } : $.noop;
+
+      return Promise.all(asyncs).then(function() {
+        return unbind;
+      }, function(err) {
+        unbind();
+        throw err;
+      });
+    },
+
+    handleDestinationAdd: function(destination) {
+      var self = this;
+
+      this.addDestinationToTimeline(this.timeline, destination)
+      .then(function() {
+        self.bindMiniFeedback(destination);
+      }).catch(this.error);
+    },
+
+    addDestinationToTimeline: function(timeline, destination) {
+      var self = this;
+      return timeline.add(destination.getIndex()).then(function(control) {
+        self.bindControlToDestination(control, destination);
+
+        var asyncs = [control.setSearchBounds(self.map.getBounds())];
+
+        control.onFocus.add(function() {
+          if (!destination.isSelected()) {
+            self.map.closeActiveInfoWindow();
+            destination.select();
+          }
+        });
+
+        control.onSearch.add(function(results) {
+          /* There seems to be a bug where if you click a search suggestion (for
+           * a query, not a resolved location) in autocomplete, the input box
+           * under it gets clicked and focused... I haven't been able to figure
+           * out why. */
+          self.trap(control.focus)();
+
+          self.map.showSearchResults(results);
+        });
+
+        if (!destination.hasNext()) {
+          asyncs.push(timeline.disableAdd());
+          var oldLastIndex = destination.getIndex() - 1;
+          if (oldLastIndex >= 0) {
+            asyncs.push(timeline.get(oldLastIndex)
+              .then(function(oldLast) {
+                if (oldLast) {
+                  self.unbindLastDestinationSearchEvents(oldLast);
+                }
+              }));
+          }
+          self.bindLastDestinationSearchEvents(control);
+        }
+
+        return Promise.all([asyncs]);
+      });
+    },
+
+    handleDestinationRemove: function(destination) {
+      var self = this;
+      var index = destination.getIndex();
+      this.timeline.remove(index).then(function(control) {
+        self.unbindLastDestinationSearchEvents(control);
+
+        if (index >= self.destinations.count()) {
+          return self.timeline.get(-1).then(function(lastControl) {
+            if (lastControl) {
+              self.bindLastDestinationSearchEvents(lastControl);
+              self.handleLastPlaceChange(lastControl.getPlace());
+            }
+          });
+        }
+        //TODO(rosswang): reselect?
+      }).catch(this.error);
     },
 
     handleTimelineDestinationAdd: function() {
-      this.destinations.add();
-      this.timeline.get(-1).focus();
+      var self = this;
+      var timeline = this.timeline;
+      function selectNewControl(control) {
+        control.focus().catch(self.error);
+        timeline.onDestinationAdd.remove(selectNewControl);
+      }
+      timeline.onDestinationAdd.add(selectNewControl);
+
+      this.destinations.add().select();
     },
 
     handleMiniDestinationAdd: function() {
@@ -305,16 +354,14 @@ var Travel = defineClass({
 
     handleLastPlaceChange: function(place) {
       if (place) {
-        this.timeline.enableAdd();
+        this.timeline.enableAdd().catch(this.error);
       } else {
-        this.timeline.disableAdd();
+        this.timeline.disableAdd().catch(this.error);
       }
     },
 
     handleLastPlaceDeselected: function() {
-      /* Wait until next frame to allow selection/focus to update; we don't want
-       * to remove a box that has just received focus. */
-      raf(this.trimUnusedDestinations);
+      this.trimUnusedDestinations().catch(this.error);
     },
 
     runCommand: function(command, rest) {
@@ -360,6 +407,76 @@ var Travel = defineClass({
       this.messages.push(message);
     },
 
+    handleSendCast: function(targetOwner, targetDeviceName, spec) {
+      switch (spec.panelName) {
+      case 'timeline':
+        this.sendTimelineCast(targetOwner, targetDeviceName);
+        break;
+      default:
+        this.error(strings.notCastable(spec.panelName));
+      }
+    },
+
+    handleReceiveCast: function(spec) {
+      switch (spec.panelName) {
+      case 'timeline':
+        this.receiveTimelineCast();
+        break;
+      default:
+        this.error(strings.notCastable(spec.panelName));
+      }
+    },
+
+    sendTimelineCast: function(targetOwner, targetDeviceName) {
+      var self = this;
+      this.vanadiumStartup.then(function(args) {
+        var endpoint = naming.rpcMount(
+          targetOwner, targetDeviceName, 'timeline');
+        return args.vanadiumWrapper.client(endpoint).then(function(ts) {
+          var tc = new TimelineClient(args.vanadiumWrapper.context(),
+            ts, self.dependencies);
+          tc.onError.add(self.error);
+          return self.adoptTimeline(tc);
+        });
+      }).catch(this.error);
+    },
+
+    receiveTimelineCast: function() {
+      var self = this;
+      var timeline = new Timeline(this.map.maps);
+      var ts = new TimelineService(timeline, this.dependencies);
+
+      this.vanadiumStartup.then(function(args) {
+        return args.vanadiumWrapper.server(
+          args.mountNames.rpcMount('timeline'), ts);
+      }).then(function() {
+        //TODO(rosswang): delay swap until after initialized
+        self.$appRoot.replaceWith(timeline.$);
+      }).catch(this.error);
+    },
+
+    adoptTimeline: function(timeline) {
+      var self = this;
+      timeline.onAddClick.add(this.handleTimelineDestinationAdd);
+      this.map.onBoundsChange.add(this.trap(timeline.setSearchBounds));
+      var async = Promise.resolve();
+      this.destinations.each(function(i, destination) {
+        async = async.then(function() {
+          return self.addDestinationToTimeline(timeline, destination);
+        });
+      });
+      this.timeline = timeline;
+      if (timeline.$) {
+        this.$timelineContainer.empty().append(timeline.$).show();
+        this.$toggleTimeline.show();
+      } else {
+        this.$timelineContainer.hide();
+        this.$toggleTimeline.hide();
+      }
+      this.map.invalidateSize();
+      return async;
+    },
+
     handleUserMessage: function(message, raw) {
       var match = CMD_REGEX.exec(raw);
       if (match) {
@@ -370,11 +487,27 @@ var Travel = defineClass({
     },
 
     trimUnusedDestinations: function() {
-      for (var lastControl = this.timeline.get(-1);
-          !lastControl.getPlace() && !lastControl.isSelected() &&
-            this.destinations.count() > 1;
-          lastControl = this.timeline.get(-1)) {
-        this.destinations.remove(-1);
+      var self = this;
+
+      var lastIndex = this.destinations.count() - 1;
+      if (lastIndex > 0) {
+        return this.timeline.get(lastIndex).then(function(lastControl) {
+          return Promise.all([
+            lastControl.getPlace(),
+            lastControl.isSelected()
+          ]);
+        }).then(function(conditions) {
+          if (!(conditions[0] || conditions[1])) {
+            //check for race condition; if we're no longer up-to-date
+            //just execute the next "iteration" without actually removing
+            if (lastIndex === self.destinations.count() - 1) {
+              self.destinations.remove(-1);
+            }
+            return self.trimUnusedDestinations();
+          }
+        });
+      } else {
+        return Promise.resolve();
       }
     },
 
@@ -418,7 +551,8 @@ var Travel = defineClass({
     var timeline = this.timeline = new Timeline(maps);
 
     var error = this.error;
-    var vanadiumStartup = vanadiumWrapper.init(opts.vanadium)
+    var vanadiumStartup = this.vanadiumStartup =
+      vanadiumWrapper.init(opts.vanadium)
       .then(function(wrapper) {
         wrapper.onError.add(error);
         wrapper.onCrash.add(error);
@@ -440,10 +574,13 @@ var Travel = defineClass({
       sbName = '/localhost:' + sbName;
     }
 
-    var sync = this.sync = new TravelSync(vanadiumStartup, {
+    this.dependencies = {
       maps: maps,
       placesService: map.createPlacesService()
-    }, sbName);
+    };
+
+    var sync = this.sync = new TravelSync(
+      vanadiumStartup, this.dependencies, sbName);
     sync.bindDestinations(destinations);
 
     this.info(strings['Connecting...'], sync.startup
@@ -477,17 +614,15 @@ var Travel = defineClass({
 
     messages.onMessage.add(this.handleUserMessage);
 
-    timeline.onAddClick.add(this.handleTimelineDestinationAdd);
-
     var miniAddButton = this.miniAddButton = new AddButton();
     var miniDestinationSearch = this.miniDestinationSearch =
       new DestinationSearch(maps);
 
     miniAddButton.onClick.add(this.handleMiniDestinationAdd);
 
-    miniDestinationSearch.setPlaceholder(strings['Search']);
-    miniDestinationSearch.setSearchBounds(map.getBounds());
-    map.onBoundsChange.add(miniDestinationSearch.setSearchBounds);
+    miniDestinationSearch.setPlaceholder(strings['Search']).catch(error);
+    miniDestinationSearch.setSearchBounds(map.getBounds()).catch(error);
+    map.onBoundsChange.add(this.trap(miniDestinationSearch.setSearchBounds));
 
     miniDestinationSearch.onSearch.add(function(results) {
       if (results.length > 0) {
@@ -504,6 +639,8 @@ var Travel = defineClass({
     miniDestinationSearch.onPlaceChange.add(function(place) {
       if (!place) {
         self.map.enableLocationSelection();
+      } else {
+        self.map.disableLocationSelection();
       }
     });
 
@@ -528,8 +665,7 @@ var Travel = defineClass({
      * unnecessarily distort the text (which is an effect that is nice for the
      * add button, so that gets it explicitly). */
     var $timelineContainer = this.$timelineContainer = $('<div>')
-      .addClass('timeline-container collapsed')
-      .append(timeline.$);
+      .addClass('timeline-container collapsed');
 
     var $toggleTimeline = this.$toggleTimeline = $('<div>')
       .addClass('toggle-timeline no-select collapsed')
@@ -541,9 +677,10 @@ var Travel = defineClass({
     map.addControls(maps.ControlPosition.LEFT_TOP, $miniPanel);
     map.addControls(maps.ControlPosition.LEFT_CENTER, $toggleTimeline);
 
-    var $domRoot = opts.domRoot? $(opts.domRoot) : $('body');
+    var $domRoot = this.$domRoot = opts.domRoot? $(opts.domRoot) : $('body');
+    var $appRoot = this.$appRoot = $('<div>');
 
-    $domRoot.append($timelineContainer, map.$);
+    $domRoot.append($appRoot.append($timelineContainer, map.$));
 
     this.initMiniFeedback();
 
@@ -553,18 +690,24 @@ var Travel = defineClass({
         panelName: 'timeline'
       }
     });
-    castingManager.onAmbiguousCast.add(function(related, unknown) {
+    castingManager.onAmbiguousCast.add(function(related, unknown, other) {
       console.debug('ambiguous cast');
       console.debug(related);
       console.debug(unknown);
+      console.debug(other);
     });
     castingManager.onNoNearbyDevices.add(function() {
       self.error(strings.noNearbyDevices);
     });
     castingManager.onError.add(error);
 
+    castingManager.onSendCast.add(this.handleSendCast);
+    sync.onReceiveCast.add(this.handleReceiveCast);
+
+    this.adoptTimeline(timeline);
+
     destinations.add();
-    miniDestinationSearch.focus();
+    miniDestinationSearch.focus().catch(error);
 
     $domRoot.keypress(function() {
       messages.open();

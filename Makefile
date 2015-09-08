@@ -9,12 +9,12 @@ js_files := $(shell find src -name "*.js")
 server_static := $(patsubst src/static/%,server-root/%,$(wildcard src/static/*))
 tests := $(patsubst %.js,%,$(shell find test -name "*.js"))
 
-out_dirs := ifc server-root node_modules bin
+out_dirs := ifc server-root node_modules
 
 .DELETE_ON_ERROR:
 
 .PHONY: all
-all: static js bin
+all: static js
 	@true
 
 .PHONY: static
@@ -23,11 +23,10 @@ static: $(server_static)
 .PHONY: js
 js: server-root/bundle.js
 
-bin:
-	@v23 go build -a -o $@/syncbased v.io/syncbase/x/ref/services/syncbase/syncbased
-	@touch $@
+.PHONY: ifc
+ifc: ifc/index.js
 
-ifc: src/ifc/*
+ifc/index.js: src/ifc/*
 	@VDLPATH=src vdl generate -lang=javascript -js-out-dir=. ifc
 
 node_modules: package.json
@@ -41,7 +40,7 @@ node_modules: package.json
 server-root:
 	@mkdir server-root
 
-server-root/bundle.js: ifc node_modules $(js_files) | server-root
+server-root/bundle.js: ifc/index.js node_modules $(js_files) | server-root
 	browserify --debug src/index.js 1> $@
 
 $(server_static): server-root/%: src/static/% | server-root
@@ -56,7 +55,7 @@ lint: node_modules
 test: lint $(tests)
 
 .PHONY: $(tests)
-$(tests): test/%: test/%.js test/* mocks/* ifc node_modules $(js_files)
+$(tests): test/%: test/%.js test/* mocks/* ifc/index.js node_modules $(js_files)
 	@tape $<
 
 .PHONY: start
@@ -71,7 +70,7 @@ creds:
 	@principal seekblessings --v23.credentials tmp/creds/$(creds)
 
 .PHONY: syncbase
-syncbase: bin
+syncbase:
 	@bash ./tools/start_services.sh
 
 .PHONY: clean-all

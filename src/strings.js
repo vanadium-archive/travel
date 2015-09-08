@@ -26,6 +26,9 @@ function getStrings(locale) {
     add: function(object) {
       return 'Add ' + object.toLowerCase();
     },
+    notCastable: function(feature) {
+      return 'The ' + feature + ' feature is not castable.';
+    },
     castingTooltip: 'To cast a panel to a nearby device, middle-click and ' +
       'drag (or left-right-click and drag) the panel towards the target ' +
       'device.',

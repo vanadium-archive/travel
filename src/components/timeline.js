@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+require ('es6-shim');
+
 var $ = require('../util/jquery');
 var defineClass = require('../util/define-class');
 
@@ -12,10 +14,12 @@ var Timeline = defineClass({
   publics: {
     disableAdd: function() {
       this.addButton.disable();
+      return Promise.resolve();
     },
 
     enableAdd: function() {
       this.addButton.enable();
+      return Promise.resolve();
     },
 
     add: function(i) {
@@ -30,16 +34,18 @@ var Timeline = defineClass({
         controls.splice(i, 0, destinationSearch);
       }
 
-      return destinationSearch;
+      this.onDestinationAdd(destinationSearch);
+
+      return Promise.resolve(destinationSearch);
     },
 
     get: function(i) {
       if (i === undefined) {
-        return this.controls.slice(0);
+        return Promise.resolve(this.controls.slice(0));
       } else if (i >= 0) {
-        return this.controls[i];
+        return Promise.resolve(this.controls[i]);
       } else if (i < 0) {
-        return this.controls[this.controls.length + i];
+        return Promise.resolve(this.controls[this.controls.length + i]);
       }
     },
 
@@ -54,12 +60,25 @@ var Timeline = defineClass({
       if (removed) {
         removed.$.remove();
       }
-      return removed;
+      return Promise.resolve(removed);
+    },
+
+    setSearchBounds: function(bounds) {
+      return Promise.all(this.controls.map(function(control) {
+        return control.setSearchBounds(bounds);
+      }));
     }
   },
 
   constants: [ '$' ],
-  events: [ 'onAddClick' ],
+  events: [
+    'onAddClick',
+
+    /**
+     * @param destinationSearch
+     */
+    'onDestinationAdd'
+  ],
 
   init: function(maps) {
     this.maps = maps;

@@ -1,0 +1,37 @@
+// Copyright 2015 The Vanadium Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package ifc
+
+type Timeline interface {
+  ClearDestination(id Id) error
+  EnableDestination(id Id) error
+  DisableDestination(id Id) error
+  FocusDestination(id Id) error
+  DestinationHasFocus(id Id) (bool | error)
+  SelectDestination(id Id) error
+  DeselectDestination(id Id) error
+  IsDestinationSelected(id Id) (bool | error)
+  GetDestinationPlace(id Id) (?Place | error)
+  SetDestinationPlace(id Id, place ?Place) error
+  SetDestinationPlaceholder(id Id, placeholder string) error
+  SetDestinationSearchBounds(id Id, bounds LatLngBounds) error
+  GetDestinationValue(id Id) (string | error)
+
+  OnDestinationDeselect(id Id) stream<_, MultiplexedEvent> error
+  OnDestinationFocus(id Id) stream<_, MultiplexedEvent> error
+  OnDestinationPlaceChange(id Id) stream<_, DestinationPlaceChangeEvent> error
+  OnDestinationSearch(id Id) stream<_, DestinationSearchEvent> error
+  OnDestinationSubmit(id Id) stream<_, DestinationSubmitEvent> error
+
+  DisableAdd() error
+  EnableAdd() error
+  Add(i ?Int16) (Id | error)
+  Get(i ?Int16) (IdOrIds | error)
+  Remove(i ?Int16) (Id | error)
+  SetSearchBounds(bounds LatLngBounds) error
+
+  OnAddClick() stream<_, Event> error
+  OnDestinationAdd() stream<_, DestinationAddEvent> error
+}

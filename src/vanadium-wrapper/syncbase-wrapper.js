@@ -132,7 +132,7 @@ var SyncbaseWrapper = defineClass({
         function(db, cb) {
           var t = db.table('t');
           var putToSyncbase = promisify(t.put.bind(t));
-          var deleteFromSyncbase = promisify(t.delete.bind(t));
+          var deleteFromSyncbase = promisify(t.deleteRange.bind(t));
 
           var ops = {
             put: function(k, v) {
@@ -217,7 +217,6 @@ var SyncbaseWrapper = defineClass({
       }
 
       if (this.writes.size) {
-        debug.log('Syncbase: deferring refresh due to writes in progress');
         return Promise.all(this.writes)
           .then(repull, repull);
 
@@ -256,7 +255,6 @@ var SyncbaseWrapper = defineClass({
               //no-op
             } else if (self.dirty) {
               abort = true;
-              debug.log('Syncbase: aborting refresh due to writes');
               resolve(repull()); //try/wait for idle again
               /* It would be nice to abort this stream for real, but we can't.
                * Leave this handler attached but no-oping to drain the stream.
@@ -402,7 +400,6 @@ var SyncbaseWrapper = defineClass({
 
     standardPut: function(fn, k, v) {
       k = joinKey(k);
-      debug.log('Syncbase: put ' + k + ' = ' + v);
       return fn(this.context, k, v);
     },
 
@@ -433,7 +430,7 @@ var SyncbaseWrapper = defineClass({
 
     this.runInBatch = promisify(syncbase.nosql.runInBatch);
     this.putToSyncbase = promisify(this.t.put.bind(this.t));
-    this.deleteFromSyncbase = promisify(this.t.delete.bind(this.t));
+    this.deleteFromSyncbase = promisify(this.t.deleteRange.bind(this.t));
 
     // Start the watch loop to periodically poll for changes from sync.
     // TODO(rosswang): Remove this once we have client watch.

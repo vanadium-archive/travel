@@ -4,6 +4,8 @@
 
 var defineClass = require('./util/define-class');
 
+var Place = require('./place');
+
 var Destination = defineClass({
   publics: {
     getIndex: function() {
@@ -20,7 +22,7 @@ var Destination = defineClass({
 
     setPlace: function(place) {
       var prev = this.place;
-      if (prev !== place) {
+      if (!Place.equal(prev, place)) {
         this.place = place;
         this.onPlaceChange(place, prev);
       }

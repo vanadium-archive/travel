@@ -8,6 +8,7 @@ var vanadium = require('vanadium');
 
 var defineClass = require('./util/define-class');
 
+var debug = require('./debug');
 var naming = require('./naming');
 
 var SyncgroupManager = require('./syncgroup-manager');
@@ -163,7 +164,8 @@ var TravelSync = defineClass({
     },
 
     handleCast: function(ctx, serverCall, spec) {
-      console.debug('Cast target for ' + spec.panelName);
+      debug.log('Cast target for ' + spec.panelName);
+      this.onReceiveCast(spec);
     },
 
     clientPromise: function(endpoint) {
@@ -181,6 +183,11 @@ var TravelSync = defineClass({
 
   constants: [ 'invitationManager', 'startup', 'status' ],
   events: {
+    /**
+     * @param spec
+     */
+    onReceiveCast: '',
+
     /**
      * @param newSize
      */

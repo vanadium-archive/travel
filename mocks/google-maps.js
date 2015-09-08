@@ -200,7 +200,8 @@ var Map = defineClass({
 
   events: {
     'bounds_changed': 'public',
-    click: 'public'
+    click: 'public',
+    resize: 'public'
   },
 
   init: function(canvas) {
@@ -318,6 +319,13 @@ var SearchBox = defineClass({
   }
 });
 
+function validateEvent(instance, eventName) {
+  //approximate check; just a sanity check during testing
+  if (typeof instance[eventName] !== 'function') {
+    throw instance + ' does not mock event ' + eventName;
+  }
+}
+
 maps = {
   ControlPosition: ControlPosition,
   DirectionsRenderer: DirectionsRenderer,
@@ -334,13 +342,11 @@ maps = {
 
   event: {
     addListener: function(instance, eventName, handler){
-      if (eventName in instance) {
-        instance[eventName].add(handler);
-      } else {
-        throw instance + ' does not mock event ' + eventName;
-      }
+      validateEvent(instance, eventName);
+      instance[eventName].add(handler);
     },
     trigger: function(instance, eventName) {
+      validateEvent(instance, eventName);
       instance[eventName].apply(instance,
         Array.prototype.slice.call(arguments, 2));
     }

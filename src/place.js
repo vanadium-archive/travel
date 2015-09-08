@@ -2,28 +2,34 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-var Deferred = require('vanadium/src/lib/deferred');
+require('es6-shim');
 
 var defineClass = require('./util/define-class');
 
 var Place = defineClass({
   statics: {
+    /**
+     * @param dependencies {placesService, maps}
+     * @param obj the plain object representation of the place
+     */
     fromObject: function(dependencies, obj) {
-      var async = new Deferred();
+      return new Promise(function(resolve, reject) {
+        if (obj.placeId) {
+          dependencies.placesService.getDetails(obj, function(place, status) {
+            if (status === dependencies.maps.places.PlacesServiceStatus.OK) {
+              resolve(new Place(place));
+            } else {
+              reject(status);
+            }
+          });
+        } else {
+          reject('Deserialization not supported.'); //TODO(rosswang)
+        }
+      });
+    },
 
-      if (obj.placeId) {
-        dependencies.placesService.getDetails(obj, function(place, status) {
-          if (status === dependencies.maps.places.PlacesServiceStatus.OK) {
-            async.resolve(new Place(place));
-          } else {
-            async.reject(status);
-          }
-        });
-      } else {
-        async.reject('Deserialization not supported.'); //TODO(rosswang)
-      }
-
-      return async.promise;
+    equal: function(a, b) {
+      return a === b || a && b && a.toKey() === b.toKey();
     }
   },
 

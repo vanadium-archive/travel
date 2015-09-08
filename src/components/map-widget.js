@@ -126,7 +126,7 @@ var MapWidget = defineClass({
       this.closeActiveInfoWindow();
 
       this.fitGeoms(results.map(function(result) {
-        return result.geometry;
+        return result.getGeometry();
       }));
 
       var dest = this.selectedDestination;
@@ -134,11 +134,9 @@ var MapWidget = defineClass({
         /* It would be nice if we could distinguish between an autocomplete
          * click and a normal search so that we don't overwrite the search box
          * text for the autocomplete click.*/
-        dest.setPlace(new Place(results[0]));
+        dest.setPlace(results[0]);
       } else if (results.length > 0) {
-        $.each(results, function(i, result) {
-          var place = new Place(result);
-
+        $.each(results, function(i, place) {
           var marker = self.getOrCreateMarker(place, SEARCH_CLIENT,
             DestinationMarker.color.RED, null, false);
           self.searchMarkers.push(marker);

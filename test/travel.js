@@ -19,7 +19,7 @@ var mockVanadiumWrapper = require('../mocks/vanadium-wrapper');
 var PLACES = mockMaps.places.corpus;
 
 //All SLAs are expressed in milliseconds.
-var UI_SLA = 50;
+var UI_SLA = 100;
 /**
  * Syncbase doesn't yet provide us any notification that the first sync after
  * joining the initial sync groups has happened. This SLA is currently based on

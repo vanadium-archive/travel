@@ -132,32 +132,36 @@ var CastingManager = defineClass({
       var self = this;
 
       var direction = getGestureDirection(v);
-      var related = this.getRelatedDevices(direction);
-      if (related.size === 1) {
-        related.forEach(function(deviceName, owner) {
-          self.cast(owner, deviceName, spec).catch(self.onError);
-        });
-      } else {
-        var unknown = this.travelSync.getUnconnectedCastTargets();
-
-        if (related.size === 0 && unknown.size === 1) {
-          unknown.forEach(function(deviceName, owner) {
-            Promise.all([
-              self.cast(owner, deviceName, spec),
-              self.travelSync.relateDevice(owner, deviceName, {
-                direction: direction,
-                magnitude: DeviceSync.NEAR
-              })
-            ]).catch(self.onError);
+      if (direction) {
+        var related = this.getRelatedDevices(direction);
+        if (related.size === 1) {
+          // Use forEach for singleton multimap entry extraction.
+          related.forEach(function(deviceName, owner) {
+            self.cast(owner, deviceName, spec).catch(self.onError);
           });
         } else {
-          var all = this.travelSync.getPossibleCastTargets();
-          var other = difference(all, related);
+          var unknown = this.travelSync.getUnconnectedCastTargets();
 
-          if (related.size > 0 || unknown.size > 0 || other.size > 0) {
-            this.onAmbiguousCast(related, unknown, other);
+          if (related.size === 0 && unknown.size === 1) {
+            // Use forEach for singleton multimap entry extraction.
+            unknown.forEach(function(deviceName, owner) {
+              Promise.all([
+                self.cast(owner, deviceName, spec),
+                self.travelSync.relateDevice(owner, deviceName, {
+                  direction: direction,
+                  magnitude: DeviceSync.NEAR
+                })
+              ]).catch(self.onError);
+            });
           } else {
-            this.onNoNearbyDevices();
+            var all = this.travelSync.getPossibleCastTargets();
+            var other = difference(all, related);
+
+            if (related.size > 0 || unknown.size > 0 || other.size > 0) {
+              this.onAmbiguousCast(related, unknown, other);
+            } else {
+              this.onNoNearbyDevices();
+            }
           }
         }
       }
@@ -168,13 +172,18 @@ var CastingManager = defineClass({
 
       return this.travelSync.cast(targetOwner, targetDeviceName, spec)
         .then(function() {
-          self.onCast(spec);
+          self.onSendCast(targetOwner, targetDeviceName, spec);
         }, this.onError);
     }
   },
 
   events: {
-    onCast: '',
+    /**
+     * @param targetOwner target device owner
+     * @param targetDeviceName target device name
+     * @param spec the cast spec, as given to makeCastable's opts.
+     */
+    onSendCast: '',
     /**
      * @param related owner => device multimap of related cast candidates
      * @param unknown owner => device multimap of unconnected cast candidates

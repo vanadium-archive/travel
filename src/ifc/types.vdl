@@ -4,7 +4,61 @@
 
 package ifc
 
+type Id string
+type Latitude float32
+type Longitude float32
+
+type IdOrIds union {
+  Id Id
+  Ids []Id
+}
+
+// required for optional ints
+type Int16 struct {
+  Value int16
+}
+
 type CastSpec struct {
   PanelName string
 }
 
+type LatLng struct {
+  Lat Latitude
+  Lng Longitude
+}
+
+type LatLngBounds struct {
+  Sw LatLng
+  Ne LatLng
+}
+
+type Place struct {
+  PlaceId Id
+}
+
+type Event struct {
+}
+
+type MultiplexedEvent struct {
+  Source Id
+}
+
+type DestinationPlaceChangeEvent struct {
+  Source Id
+  Place ?Place
+  Previous ?Place
+}
+
+type DestinationSearchEvent struct {
+  Source Id
+  Places []Place
+}
+
+type DestinationSubmitEvent struct {
+  Source Id
+  Value string
+}
+
+type DestinationAddEvent struct {
+  Id Id
+}

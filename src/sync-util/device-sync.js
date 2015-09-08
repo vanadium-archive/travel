@@ -72,6 +72,20 @@ function negateDirection(direction) {
   }
 }
 
+var RE = 6.371e6;
+
+function cartesian(geo) {
+  var lat = geo.latitude * Math.PI / 180;
+  var lng = geo.longitude * Math.PI / 180;
+  var planeFactor = Math.cos(lng);
+
+  return {
+    x: RE * Math.cos(lat) * planeFactor,
+    y: RE * Math.sin(lat) * planeFactor,
+    z: RE * Math.sin(lng)
+  };
+}
+
 var DeviceSync = defineClass({
   statics: {
     LEFT: LEFT,

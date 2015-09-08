@@ -18,8 +18,9 @@ function deviceMount(username, deviceName) {
   return vanadium.naming.join(appMount(username), deviceName);
 }
 
-function rpcMount(username, deviceName) {
-  return vanadium.naming.join(deviceMount(username, deviceName), 'rpc');
+function rpcMount(username, deviceName, serviceName) {
+  return vanadium.naming.join(deviceMount(username, deviceName),
+    serviceName || 'rpc');
 }
 
 function mountNames(id) {
@@ -27,7 +28,10 @@ function mountNames(id) {
     user: userMount(id.username),
     app: appMount(id.username),
     device: deviceMount(id.username, id.deviceName),
-    rpc: rpcMount(id.username, id.deviceName)
+    rpc: rpcMount(id.username, id.deviceName),
+    rpcMount: function(serviceName) {
+      return rpcMount(id.username, id.deviceName, serviceName);
+    }
   };
 }
 

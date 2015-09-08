@@ -2,81 +2,122 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+require('es6-shim');
+
 var $ = require('../util/jquery');
 var defineClass = require('../util/define-class');
+
+var debug = require('../debug');
+var Place = require('../place');
 
 var DestinationSearch = defineClass({
   publics: {
     clear: function() {
-      this.setPlace(null);
+      var async = this.setPlace(null);
       this.$searchBox.prop('value', '');
+      return async;
     },
 
     enable: function() {
       this.$searchBox.removeAttr('disabled');
+      return Promise.resolve();
     },
 
     disable: function() {
       this.$searchBox.attr('disabled', 'disabled');
+      return Promise.resolve();
     },
 
     focus: function() {
       this.$.find('input:visible').focus();
+      return Promise.resolve();
     },
 
     hasFocus: function() {
-      return this.$.find(':focus').length > 0;
+      return Promise.resolve(this.$.find(':focus').length > 0);
     },
 
     setSearchBounds: function(bounds) {
       this.searchBox.setBounds(bounds);
+      return Promise.resolve();
     },
 
     select: function() {
       this.$.addClass('selected');
+      return Promise.resolve();
     },
 
     deselect: function() {
-      if (this.isSelected()) {
-        this.$.removeClass('selected');
-        this.onDeselect();
-      }
+      var self = this;
+      return this.isSelected().then(function(isSelected) {
+        if (isSelected) {
+          self.$.removeClass('selected');
+          self.onDeselect();
+        }
+      });
     },
 
     isSelected: function() {
-      return this.$.hasClass('selected');
+      return Promise.resolve(this.$.hasClass('selected'));
     },
 
     getPlace: function() {
-      return this.place;
+      return Promise.resolve(this.place);
     },
 
     setPlace: function(place) {
+      var self = this;
       var prev = this.place;
-      if (prev !== place) {
+      if (!Place.equal(prev, place)) {
         this.place = place;
         this.setAutocomplete(!place);
 
         var newValue;
         if (place) {
-          newValue = place.getSingleLine();
-        } else if (!this.hasFocus()) {
-          newValue = '';
-        }
-        if (newValue !== undefined) {
-          this.$searchBox.prop('value', newValue);
+          newValue = Promise.resolve(place.getSingleLine());
+        } else {
+          newValue = this.hasFocus().then(function(hasFocus) {
+            /* We only want to clear when we don't have focus because if we have
+             * focus, we're actively editing the text even if it may be
+             * presently invalid. */
+            if (!hasFocus) {
+              return '';
+            }
+          });
         }
 
-        this.onPlaceChange(place, prev);
+        /* Since making all timeline UI asynchronous, we introduce a race
+         * condition where a destination deselect starts a chain of events to
+         * clear a place, then a reselect starts a chain of events to set it,
+         * but since the clear includes an asynchronous focus check, it takes
+         * longer to complete and can overwrite the effect of the set. So, we
+         * need to queue the aftereffects. */
+
+        this.setValueInProgress = this.setValueInProgress
+          .catch($.noop)
+          .then(function() {
+            return newValue;
+          })
+          .then(function(newValue) {
+            if (newValue !== undefined) {
+              self.$searchBox.prop('value', newValue);
+            }
+
+            self.onPlaceChange(place, prev);
+          });
+        return this.setValueInProgress;
+      } else {
+        return Promise.resolve();
       }
     },
 
     setPlaceholder: function(placeholder) {
       this.$searchBox.attr('placeholder', placeholder);
+      return Promise.resolve();
     },
 
     getValue: function() {
-      return this.$searchBox.prop('value');
+      return Promise.resolve(this.$searchBox.prop('value'));
     }
   },
 
@@ -123,13 +164,15 @@ var DestinationSearch = defineClass({
 
     inputKey: function(e) {
       if (e.which === 13) {
-        this.onSubmit(this.getValue());
+        this.getValue().then(this.onSubmit).catch(debug.log);
       }
       e.stopPropagation();
     }
   },
 
   events: [
+    'onDeselect',
+
     /**
      * @param event jQuery Event object for text box focus event.
      */
@@ -146,8 +189,6 @@ var DestinationSearch = defineClass({
      */
     'onSearch',
 
-    'onDeselect',
-
     /**
      * Event fired when the enter key is pressed. This is distinct from the
      * onSearch event, which is fired when valid location properties are chosen,
@@ -162,6 +203,8 @@ var DestinationSearch = defineClass({
 
   init: function(maps) {
     var self = this;
+
+    this.setValueInProgress = Promise.resolve();
 
     var $searchBox = $.merge($('<input>'), $('<input>'))
       .attr('type', 'text')
@@ -185,7 +228,9 @@ var DestinationSearch = defineClass({
     this.autocomplete = true;
 
     maps.event.addListener(this.searchBox, 'places_changed', function() {
-      self.onSearch(self.searchBox.getPlaces());
+      self.onSearch(self.searchBox.getPlaces().map(function(result) {
+        return new Place(result);
+      }));
     });
   }
 });
