@@ -11,7 +11,7 @@ var destDefs = {
     var self = this;
     return this.outer.service.getDestinationPlace(this.outer.context, this.id)
       .then(function(place) {
-        return ifcx.toPlace(self.outer.dependencies, place);
+        return ifcx.toPlace(self.outer.maps, place);
       });
   },
 
@@ -67,7 +67,7 @@ var TimelineClient = defineClass({
     },
 
     remove: function(i) {
-      return this.service.get(this.context, ifcx.box(i))
+      return this.service.remove(this.context, ifcx.box(i))
         .then(this.getDestination);
     },
 
@@ -123,17 +123,15 @@ var TimelineClient = defineClass({
         this.bindEvent('onFocus', 'onDestinationFocus');
         this.bindEvent('onPlaceChange', 'onDestinationPlaceChange',
           function(e) {
-            return Promise.all([
-              ifcx.toPlace(self.outer.dependencies, e.place),
-              ifcx.toPlace(self.outer.dependencies, e.previous)
-            ]);
+            return [
+              ifcx.toPlace(self.outer.maps, e.place),
+              ifcx.toPlace(self.outer.maps, e.previous)
+            ];
           });
         this.bindEvent('onSearch', 'onDestinationSearch', function(e) {
-          return Promise.all(e.places.map(function(place) {
-            return ifcx.toPlace(self.outer.dependencies, place);
-          })).then(function(places) {
-            return [places];
-          });
+          return [e.places.map(function(place) {
+            return ifcx.toPlace(self.outer.maps, place);
+          })];
         });
         this.bindEvent('onSubmit', 'onDestinationSubmit', function(e) {
           return [e.value];
@@ -176,12 +174,12 @@ var TimelineClient = defineClass({
     onError: 'memory'
   },
 
-  init: function(context, service, dependencies) {
+  init: function(context, service, maps) {
     var self = this;
 
     this.context = context;
     this.service = service;
-    this.dependencies = dependencies;
+    this.maps = maps;
     this.destinations = {};
 
     this.bindEvent('onAddClick');

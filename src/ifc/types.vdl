@@ -34,6 +34,12 @@ type LatLngBounds struct {
 
 type Place struct {
   PlaceId Id
+
+  Location LatLng
+  Viewport ?LatLngBounds
+
+  FormattedAddress string
+  Name string
 }
 
 type Event struct {

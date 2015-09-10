@@ -140,8 +140,17 @@ var Travel = defineClass({
         /* Since these controls are 1:1 with destinations, we don't want to stay
          * in a state where the control has invalid text but the destination is
          * still valid; that would be confusing to the user (e.g. abandoned
-         * query string "restaurants" for destination 4 Privet Drive.) */
-        control.onPlaceChange.add(destination.setPlace);
+         * query string "restaurants" for destination 4 Privet Drive.)
+         *
+         * However, if the place is valid, don't bother updating the
+         * destination. The destination is authoritative, and any disparity will
+         * be due to update lag (especially bad for remote components), which
+         * will result in oscillation. */
+        control.onPlaceChange.add(function(place) {
+          if (!place) {
+            destination.setPlace(place);
+          }
+        });
       }
 
       asyncs.push(updateOrdinalAsync());
@@ -434,7 +443,7 @@ var Travel = defineClass({
           targetOwner, targetDeviceName, 'timeline');
         return args.vanadiumWrapper.client(endpoint).then(function(ts) {
           var tc = new TimelineClient(args.vanadiumWrapper.context(),
-            ts, self.dependencies);
+            ts, self.map.maps);
           tc.onError.add(self.error);
           return self.adoptTimeline(tc);
         });
@@ -444,7 +453,7 @@ var Travel = defineClass({
     receiveTimelineCast: function() {
       var self = this;
       var timeline = new Timeline(this.map.maps);
-      var ts = new TimelineService(timeline, this.dependencies);
+      var ts = new TimelineService(timeline, this.map.maps);
 
       this.vanadiumStartup.then(function(args) {
         return args.vanadiumWrapper.server(
@@ -574,13 +583,13 @@ var Travel = defineClass({
       sbName = '/localhost:' + sbName;
     }
 
-    this.dependencies = {
+    var dependencies = {
       maps: maps,
       placesService: map.createPlacesService()
     };
 
     var sync = this.sync = new TravelSync(
-      vanadiumStartup, this.dependencies, sbName);
+      vanadiumStartup, dependencies, sbName);
     sync.bindDestinations(destinations);
 
     this.info(strings['Connecting...'], sync.startup

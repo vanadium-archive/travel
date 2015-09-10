@@ -8,7 +8,7 @@ var vdlTravel = require('../../ifc');
 
 var Place = require('../place');
 
-module.exports = {
+var x = {
   box: function(i) {
     return i === undefined || i === null? i : new vdlTravel.Int16({ value: i });
   },
@@ -17,35 +17,58 @@ module.exports = {
     return ifc && ifc.value;
   },
 
-  toPlace: function(dependencies, ifc) {
-    return ifc? Place.fromObject(dependencies, ifc) : Promise.resolve();
+  toPlace: function(maps, ifc) {
+    return ifc && new Place({
+      'place_id': ifc.placeId,
+      geometry: {
+        location: x.toLatLng(maps, ifc.location),
+        viewport: x.toLatLngBounds(maps, ifc.viewport)
+      },
+      'formatted_address': ifc.formattedAddress,
+      name: ifc.name
+    });
   },
 
   fromPlace: function(place) {
-    return place && new vdlTravel.Place(place.toObject());
+    if (!place) {
+      return place;
+    }
+
+    var placeObj = place.getPlaceObject();
+    var details = place.getDetails();
+    return new vdlTravel.Place({
+      placeId: placeObj.placeId,
+      location: x.fromLatLng(place.getLocation()),
+      viewport: place.getGeometry().viewport,
+      formattedAddress: details && details['formatted_address'] ||
+        placeObj.query,
+      name: details && details.name
+    });
   },
 
   toLatLng: function(maps, ifc) {
-    return new maps.LatLng(ifc.lat, ifc.lng);
+    return ifc && new maps.LatLng(ifc.lat, ifc.lng);
   },
 
   fromLatLng: function(latlng) {
-    return new vdlTravel.LatLng({
+    return latlng && new vdlTravel.LatLng({
       lat: latlng.lat(),
       lng: latlng.lng()
     });
   },
 
   toLatLngBounds: function(maps, ifc) {
-    return new maps.LatLngBounds(
-      module.exports.toLatLng(maps, ifc.sw),
-      module.exports.toLatLng(maps, ifc.ne));
+    return ifc && new maps.LatLngBounds(
+      x.toLatLng(maps, ifc.sw),
+      x.toLatLng(maps, ifc.ne));
   },
 
   fromLatLngBounds: function(bounds) {
-    return new vdlTravel.LatLngBounds({
-      sw: module.exports.fromLatLng(bounds.getSouthWest()),
-      ne: module.exports.fromLatLng(bounds.getNorthEast())
+    return bounds && new vdlTravel.LatLngBounds({
+      sw: x.fromLatLng(bounds.getSouthWest()),
+      ne: x.fromLatLng(bounds.getNorthEast())
     });
   }
 };
+
+module.exports = x;
