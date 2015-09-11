@@ -63,11 +63,11 @@ function event(eventName, eventFactory) {
  * function, and we'd have to new Function each one to preserve that.
  *
  * @param timeline the timeline control to serve.
- * @param dependencies {placesService, maps}
+ * @param maps
  */
-function TimelineService(timeline, dependencies) {
+function TimelineService(timeline, maps) {
   this.timeline = timeline;
-  this.dependencies = dependencies;
+  this.maps = maps;
   this.destinations = {};
   this.destinationIds = new Map();
 
@@ -118,7 +118,7 @@ $.extend(TimelineService.prototype, {
 
   setDestinationPlace: function(ctx, serverCall, id, place) {
     var destination = this.destinations[id];
-    return ifcx.toPlace(this.dependencies, place).then(destination.setPlace);
+    return destination.setPlace(ifcx.toPlace(this.maps, place));
   },
 
   setDestinationPlaceholder: function(ctx, serverCall, id, placeholder) {
@@ -127,7 +127,7 @@ $.extend(TimelineService.prototype, {
 
   setDestinationSearchBounds: function(ctx, serverCall, id, bounds) {
     this.destinations[id].setSearchBounds(
-      ifcx.toLatLngBounds(this.dependencies.maps, bounds));
+      ifcx.toLatLngBounds(this.maps, bounds));
   },
 
   getDestinationValue: function(ctx, serverCall, id) {
@@ -175,7 +175,7 @@ $.extend(TimelineService.prototype, {
 
   setSearchBounds: function(ctx, serverCall, bounds) {
     this.timeline.setSearchBounds(
-      ifcx.toLatLngBounds(this.dependencies.maps, bounds));
+      ifcx.toLatLngBounds(this.maps, bounds));
   },
 
   onAddClick: event('onAddClick',
