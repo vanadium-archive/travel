@@ -4,6 +4,7 @@
 
 require('es6-shim');
 
+var hg = require('mercury');
 var queryString = require('query-string');
 var raf = require('raf');
 
@@ -15,6 +16,7 @@ var DestinationSearch = require('./components/destination-search');
 var MapWidget = require('./components/map-widget');
 var Messages = require('./components/messages');
 var Message = require('./components/message');
+var Suggestions = require('./components/suggestions');
 var Timeline = require('./components/timeline');
 var TimelineClient = require('./components/timeline-client');
 var TimelineService = require('./components/timeline-server');
@@ -45,6 +47,9 @@ function handleDestinationOrdinalUpdate(control, destination) {
 }
 
 var CMD_REGEX = /\/(\S*)(?:\s+(.*))?/;
+var SUGGESTION_PHOTO_OPTS = {
+  maxHeight: 96
+};
 
 var Travel = defineClass({
   publics: {
@@ -207,7 +212,7 @@ var Travel = defineClass({
            * out why. */
           self.trap(control.focus)();
 
-          self.map.showSearchResults(results);
+          self.handleSearchResults(results);
         });
 
         if (!destination.hasNext()) {
@@ -520,6 +525,60 @@ var Travel = defineClass({
       }
     },
 
+    handleSearchResults: function(results) {
+      this.map.showSearchResults(results);
+      if (results.length > 1) {
+        this.hgState.suggestions.set({
+          suggestions: results.map(function(place) {
+            var details = place.getDetails();
+            var photoUrl;
+
+            if (details.photos && details.photos[0]) {
+              photoUrl = details.photos[0].getUrl(SUGGESTION_PHOTO_OPTS);
+            }
+
+            return {
+              placeId: place.toObject().placeId,
+              placeName: place.getName(),
+              photoUrl: photoUrl,
+              iconUrl: details.icon,
+              rating: details.rating,
+              priceLevel: details['price_level']
+            };
+          })
+        });
+        this.showSuggestions();
+      } else {
+        this.dismissSuggestions();
+      }
+    },
+
+    showSuggestions: function() {
+      if (!this.$hgSuggestionsRoot) {
+        this.$hgSuggestionsRoot = $('<div>')
+          .addClass('suggestions-container')
+          .insertBefore(this.map.$);
+        this.dismissHgSuggestions = hg.app(
+          this.$hgSuggestionsRoot[0], this.hgState, this.hgRenderSuggestions);
+        this.map.invalidateSize();
+      }
+      this.$hgSuggestionsRoot.prop('scrollTop', 0);
+    },
+
+    hgRenderSuggestions: function(state) {
+      return Suggestions.render(state.suggestions);
+    },
+
+    dismissSuggestions: function() {
+      if (this.dismissHgSuggestions) {
+        this.dismissHgSuggestions();
+        delete this.dismissHgSuggestions;
+        this.$hgSuggestionsRoot.remove();
+        delete this.$hgSuggestionsRoot;
+        this.map.invalidateSize();
+      }
+    },
+
     /**
      * The map widget isn't very sensitive to size updates, so we need to
      * continuously invalidate during animations.
@@ -542,11 +601,17 @@ var Travel = defineClass({
     }
   },
 
+  constants: [ 'hgState' ],
+
   init: function (opts) {
     var self = this;
 
     opts = opts || {};
     var vanadiumWrapper = opts.vanadiumWrapper || vanadiumWrapperDefault;
+
+    this.hgState = hg.state({
+      suggestions: new Suggestions()
+    });
 
     var destinations = this.destinations = new Destinations();
     destinations.onAdd.add(this.handleDestinationAdd);
@@ -642,7 +707,7 @@ var Travel = defineClass({
          * place and so must pick a new one. */
         map.disableLocationSelection();
       }
-      map.showSearchResults(results);
+      self.handleSearchResults(results);
     });
 
     miniDestinationSearch.onPlaceChange.add(function(place) {

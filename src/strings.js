@@ -50,6 +50,7 @@ function getStrings(locale) {
       UNKNOWN_ERROR: 'Server error'
     },
     'Final destination': 'Final destination',
+    'Free': 'Free',
     label: function(label, details) {
       return label + ': ' + details;
     },
@@ -81,6 +82,7 @@ function getStrings(locale) {
       return username + ' is not reachable or is not a Travel Planner user.';
     },
     'Origin': 'Origin',
+    priceLevelUnit: '$',
     'Search': 'Search',
     sendingInvite: function(username) {
       return 'Inviting ' + username + ' to join the trip...';

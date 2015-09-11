@@ -40,6 +40,10 @@ type Place struct {
 
   FormattedAddress string
   Name string
+  PhotoUrl string
+  IconUrl string
+  Rating float32
+  PriceLevel byte
 }
 
 type Event struct {

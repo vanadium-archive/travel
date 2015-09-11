@@ -327,6 +327,56 @@ body {
   content: '▲';
 }
 
+.suggestions-container {
+  float: right;
+  overflow-y: auto;
+  height: 100%;
+  width: 25em;
+}
+
+.suggestion {
+  border: 1px solid #ccc;
+  font-family: Roboto, Arial, sans-serif;
+  padding: .5em;
+  margin: 0 0 -1px 0;
+}
+
+.suggestion .img-container {
+  float: left;
+  margin-right: 8px;
+  height: 92px;
+  width: 80px;
+  text-align: center;
+  font-size: 80px;
+  color: gray;
+}
+
+.suggestion img {
+  height: 100%;
+  width: 100%;
+}
+
+.suggestion img.photo {
+  object-fit: cover;
+}
+
+.suggestion img.icon {
+  object-fit: scale-down;
+  background-color: #eee;
+}
+
+.suggestion .rating {
+  color: #e7711b;
+  font-size: 13px;
+  line-height: 16px;
+}
+
+.suggestion .price-level {
+  color: #8c8c8c;
+  font-size: 13px;
+  line-height: 16px;
+}
+
 .vertical-middle {
   position: relative;
   top: 50%;
