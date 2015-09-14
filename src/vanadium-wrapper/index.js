@@ -39,7 +39,7 @@ var VanadiumWrapper = defineClass({
         var p;
 
         var context = self.runtime.getContext();
-        var namespace = self.runtime.namespace();
+        var namespace = self.runtime.getNamespace();
 
         function mount(replaceMount) {
           return namespace.mount(context, name, server, NAME_TTL, replaceMount);
@@ -80,12 +80,12 @@ var VanadiumWrapper = defineClass({
     },
 
     getPermissions: function(name) {
-      return this.runtime.namespace().getPermissions(
+      return this.runtime.getNamespace().getPermissions(
         this.runtime.getContext(), name);
     },
 
     setPermissions: function(name, perms) {
-      return this.runtime.namespace().setPermissions(
+      return this.runtime.getNamespace().setPermissions(
         this.runtime.getContext(), name, perms);
     },
 
@@ -98,7 +98,7 @@ var VanadiumWrapper = defineClass({
      * @returns a promise resolving to a client or rejecting with an error.
      */
     client: function(endpoint) {
-      var client = this.runtime.newClient();
+      var client = this.runtime.getClient();
       return client.bindTo(this.runtime.getContext(), endpoint);
     },
 
@@ -108,7 +108,7 @@ var VanadiumWrapper = defineClass({
      * @returns a promise resolving to void or rejecting with an error.
      */
     server: function(endpoint, server) {
-      return this.runtime.newServer().serve(endpoint, server);
+      return this.runtime.newServer(endpoint, server);
     },
 
     /**
