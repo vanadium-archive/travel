@@ -10,51 +10,68 @@ var $ = require('../src/util/jquery');
 var defineClass = require('../src/util/define-class');
 
 //All periods are expressed in milliseconds.
-var SYNC_LOOP_PERIOD = 50;
-var WATCH_LOOP_PERIOD = 50;
+var SYNC_LOOP_PERIOD = 25;
+var WATCH_LOOP_PERIOD = 25;
 
 var syncgroups = {};
 
-function update(a, b) {
+function updateWatchers(watchers, k, v) {
+  if (watchers) {
+    watchers.forEach(function(watcher) {
+      watcher.update(k, v);
+    });
+  }
+}
+
+function concatWatchers(a, b) {
+  if (!a) {
+    return b;
+  } else if (!b) {
+    return a;
+  }
+  return a.concat(b);
+}
+
+function update(a, b, key, parentWatchers) {
+  var watchers = concatWatchers(parentWatchers, b.watchers);
   $.each(a, function(k, v) {
-    if (k !== 'value' && k !== 'version') {
+    if (k !== 'value' && k !== 'version' && k !== 'watchers') {
       var bv = b[k];
-      if (bv) {
-        update(v, bv);
-      } else {
-        b[k] = $.extend(true, {}, v);
+      if (!bv) {
+        bv = b[k] = {};
       }
+      update(v, bv, key.concat(k), watchers);
     }
   });
 
-  if (a.version > b.version) {
+  if (a.version > b.version ||
+      a.version !== undefined && b.version === undefined ||
+      a.version === b.version && a.value !== b.value /* initial diff */) {
     b.value = a.value;
     b.version = a.version;
+    updateWatchers(watchers, key, b.value);
   }
 }
 
 function sync(a, b, prefixes) {
   $.each(prefixes, function() {
-    var suba = recursiveGet(a, this);
-    var subb = recursiveGet(b, this);
+    var suba = recursiveCreate(a, this);
+    var subb = recursiveCreate(b, this);
 
-    if (suba && subb) {
-      update(suba, subb);
-      update(subb, suba);
-    } else if (!suba) {
-      recursiveCopy(a, this, subb);
-    } else if (!subb) {
-      recursiveCopy(b, this, suba);
-    }
+    update(suba.node, subb.node, this, subb.parentWatchers);
+    update(subb.node, suba.node, this, suba.parentWatchers);
   });
+
+  a.endBatch();
+  b.endBatch();
 }
 
 function syncLoop() {
-  $.each(syncgroups, function() {
+  $.each(syncgroups, function(i, sg) {
     var prev;
-    this.forEach(function(sb) {
+    sg.forEach(function(sb) {
       if (prev) {
-        sync(prev, sb, this.prefixes);
+        sync(prev, sb, sg.prefixes);
       }
 
       prev = sb;
@@ -74,7 +91,9 @@ function advanceVersion(node) {
 }
 
 function recursiveCreate(node, key) { //it's recursive in spirit
+  var parentWatchers;
   $.each(key, function() {
+    parentWatchers = concatWatchers(parentWatchers, node.watchers);
     var child = node[this];
     if (!child) {
       child = node[this] = {};
@@ -82,59 +101,78 @@ function recursiveCreate(node, key) { //it's recursive in spirit
     node = child;
   });
 
-  return node;
+  return {
+    node: node,
+    parentWatchers: parentWatchers
+  };
 }
 
 function recursiveSet(node, key, value) {
-  node = recursiveCreate(node, key);
+  var target = recursiveCreate(node, key);
 
-  node.value = value;
-  advanceVersion(node);
+  target.node.value = value;
+  advanceVersion(target.node);
+  updateWatchers(
+    concatWatchers(target.parentWatchers, node.watchers), key, value);
 }
 
-function recursiveCopy(node, key, content) {
-  $.extend(true, recursiveCreate(node, key), content);
-}
-
-function recursiveGet(node, key) {
+function recursiveGet(node, key, parentWatchers) {
   $.each(key, function() {
     if (!node) {
       return false;
     }
+    parentWatchers = concatWatchers(parentWatchers, node.watchers);
     node = node[this];
   });
-  return node;
+  return {
+    node: node,
+    parentWatchers: parentWatchers
+  };
 }
 
-function recursiveDelete(node, key) {
+function recursiveDelete(node, key, parentWatchers) {
+  parentWatchers = parentWatchers || [];
   if (key) {
-    node = recursiveGet(node, key);
+    var target = recursiveGet(node, key, parentWatchers);
+    node = target.node;
+    parentWatchers = target.parentWatchers;
   }
 
   if (node) {
-    delete node.value;
-    advanceVersion(node);
+    var watchers = concatWatchers(parentWatchers, node.watchers);
+
+    if (node.value !== undefined) {
+      delete node.value;
+      advanceVersion(node);
+      updateWatchers(watchers, key);
+    } else {
+      advanceVersion(node);
+    }
     $.each(node, function(key, value) {
-      if (key !== 'version') {
-        recursiveDelete(value);
+      if (key !== 'version' && key !== 'watchers') {
+        recursiveDelete(value, null, watchers);
       }
     });
   }
 }
 
-function extractData(repo) {
+function extractData(repo, onData, fullKey) {
   var data;
+  fullKey = fullKey || [];
   $.each(repo, function(k, v) {
     if (k === 'value') {
-      if (typeof data === 'object') {
-        if (v !== undefined) {
+      if (v !== undefined) {
+        if (typeof data === 'object') {
           data._ = v;
+        } else {
+          data = v;
         }
-      } else {
-        data = v;
+        if (onData) {
+          onData(fullKey, v);
+        }
       }
-    } else if (k !== 'version') {
-      var value = extractData(v);
+    } else if (k !== 'version' && k !== 'watchers') {
+      var value = extractData(v, onData, fullKey.concat(k));
       if (value !== undefined) {
         if (data === undefined) {
           data = {};
@@ -173,17 +211,21 @@ var MockSyncbaseWrapper = defineClass({
 
     put: function(k, v) {
       recursiveSet(this.repo, k, v);
+      this.repo.endBatch();
       return Promise.resolve();
     },
 
     delete: function(k) {
       recursiveDelete(this.repo, k);
+      this.repo.endBatch();
       return Promise.resolve();
     },
 
+    // TODO(rosswang): transitional
     getData: function() {
       return extractData(this.repo) || {};
     },
+    // TODO(rosswang): end transitional
 
     syncgroup: function(sgAdmin, name) {
       var repo = this.repo;
@@ -243,26 +285,111 @@ var MockSyncbaseWrapper = defineClass({
       return sgp;
     },
 
+    getRawWatched: function(prefix, pullHandler, streamHandler) {
+      var target = recursiveCreate(this.repo, prefix);
+      extractData(target.node, pullHandler.onData, prefix);
+      this.registerHandlers(target.node, streamHandler);
+      return Promise.resolve();
+    },
+
+    // TODO(rosswang): transitional
     refresh: function() {
       this.onUpdate(this.getData());
     }
+    // TODO(rosswang): end transitional
   },
 
+  privates: {
+    watcher: defineClass.innerClass({
+      publics: {
+        update: function(k, v) {
+          this.dispatchLast(true);
+          this.lastOp = {
+            key: k,
+            value: v
+          };
+          this.outer.opBatch.add(this.ifc);
+        },
+
+        endBatch: function() {
+          if (this.dispatchLast(false) && this.streamHandler.onBatchEnd) {
+            try {
+              this.streamHandler.onBatchEnd();
+            } catch (err) {
+              this.streamHandler.onError(err);
+            }
+          }
+        }
+      },
+
+      privates: {
+        dispatchLast: function(continued) {
+          if (this.lastOp) {
+            try {
+              if (this.lastOp.value === undefined) {
+                if (this.streamHandler.onDelete) {
+                  this.streamHandler.onDelete(this.lastOp.key, continued);
+                }
+              } else {
+                if (this.streamHandler.onPut) {
+                  this.streamHandler.onPut(
+                    this.lastOp.key, this.lastOp.value, continued);
+                }
+              }
+            } catch (err) {
+              this.streamHandler.onError(err);
+            }
+            return true;
+          } else {
+            return false;
+          }
+        }
+      },
+
+      init: function(streamHandler) {
+        this.streamHandler = streamHandler;
+      }
+    }),
+
+    registerHandlers: function(node, streamHandler) {
+      var watcher = this.watcher(streamHandler);
+
+      if (node.watchers) {
+        node.watchers.push(watcher);
+      } else {
+        node.watchers = [watcher];
+      }
+    }
+  },
+
+  // TODO(rosswang): transitional
   events: {
     onError: 'memory',
     onUpdate: 'memory'
   },
+  // TODO(rosswang): end transitional
 
   init: function() {
     var self = this;
 
-    this.repo = {};
+    var opBatch = this.opBatch = new Set();
 
+    this.repo = {
+      endBatch: function() {
+        opBatch.forEach(function(watcher) {
+          watcher.endBatch();
+        });
+        opBatch.clear();
+      }
+    };
+
+    // TODO(rosswang): transitional
     function watchLoop() {
       self.refresh();
       setTimeout(watchLoop, WATCH_LOOP_PERIOD);
     }
     process.nextTick(watchLoop);
+    // TODO(rosswang): end transitional
   }
 });
 

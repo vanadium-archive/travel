@@ -64,7 +64,7 @@ function defineClass(def) {
       if ($.isArray(def.events)) {
         $.each(def.events, function(i, event) {
           if ($.type(event) === 'string') {
-            defineEvent(pthis, ifc, event);
+            pthis[event] = defineEvent(ifc, event);
           } else {
             defineEventsFromObject(pthis, ifc, event);
           }
@@ -96,6 +96,10 @@ function defineClass(def) {
   if (def.statics) {
     $.extend(constructor, def.statics);
   }
+
+  // The function bodies aren't actually useful but the function objects provide
+  // useful reflective properties.
+  constructor.ifc = def.publics;
 
   return constructor;
 }
@@ -166,35 +170,37 @@ function polyReflexiveLateBind(proxy, context, members) {
   return proxy;
 }
 
-function defineEvent(pthis, ifc, name, flags) {
+defineClass.event = defineEvent;
+
+function defineEvent(ifc, name, flags) {
   var dispatcher = $.Callbacks(flags);
   //Use polyBind on function that fires to add the callable syntactic sugar
-  var callableDispatcher = pthis[name] = polyBind(function() {
+  var callableDispatcher = polyBind(function() {
     dispatcher.fireWith.call(dispatcher, ifc, arguments);
   }, dispatcher, dispatcher, false);
 
-  if (flags && flags.indexOf('private') > -1) {
-    return;
+  if (!(flags && flags.indexOf('private') > -1)) {
+    if (flags && flags.indexOf('public') > -1) {
+      ifc[name] = callableDispatcher;
+    } else {
+      var publicEvent = {};
+      /* We'll want the context to actually be callableDispatcher even though
+       * the interface and functionality of dispatcher suffice so that we can
+       * late-bind to the instance exposed to private this. */
+      polyBind(publicEvent, callableDispatcher,
+        ['disabled', 'fired', 'has', 'locked'], true);
+      polyReflexiveLateBind(publicEvent, callableDispatcher,
+        ['add', 'disable', 'empty', 'lock', 'remove']);
+
+      ifc[name] = publicEvent;
+    }
   }
 
-  if (flags && flags.indexOf('public') > -1) {
-    ifc[name] = callableDispatcher;
-  } else {
-    var publicEvent = {};
-    /* We'll want the context to actually be callableDispatcher even though
-     * the interface and functionality of dispatcher suffice so that we can
-     * late-bind to the instance exposed to private this. */
-    polyBind(publicEvent, callableDispatcher,
-      ['disabled', 'fired', 'has', 'locked'], true);
-    polyReflexiveLateBind(publicEvent, callableDispatcher,
-      ['add', 'disable', 'empty', 'lock', 'remove']);
-
-    ifc[name] = publicEvent;
-  }
+  return callableDispatcher;
 }
 
 function defineEventsFromObject(pthis, ifc, events) {
   $.each(events, function(event, flags) {
-    defineEvent(pthis, ifc, event, flags);
+    pthis[event] = defineEvent(ifc, event, flags);
   });
 }

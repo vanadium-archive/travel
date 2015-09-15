@@ -30,7 +30,7 @@ var UI_SLA = 100;
  */
 var STABLE_SLA = 2500;
 var SYNC_SLA = MockSyncbaseWrapper.SYNC_SLA;
-var DEVICE_DISCOVERY_SLA = 5000;
+var DEVICE_DISCOVERY_SLA = 3000;
 
 function cleanDom() {
   $('body').empty();

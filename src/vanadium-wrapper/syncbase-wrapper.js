@@ -44,6 +44,10 @@ function joinKey(key) {
   return key.join('.');
 }
 
+function splitKey(key) {
+  return key.split('.');
+}
+
 /**
  * Translate Syncbase hierarchical keys to object structure for easier
  * processing. '.' is chosen as the separator; '/' is reserved in Syncbase.
@@ -52,11 +56,9 @@ function joinKey(key) {
  * need regex escaping.
  */
 function recursiveSet(root, key, value) {
-  var matches = /\.?([^\.]*)(.*)/.exec(key);
-  var member = matches[1];
-  var remaining = matches[2];
+  var member = key[0];
 
-  if (remaining) {
+  if (key.length > 1) {
     var child = root[member];
     if (!child) {
       child = root[member] = {};
@@ -64,7 +66,7 @@ function recursiveSet(root, key, value) {
       child = root[member] = { _: child };
     }
 
-    recursiveSet(child, remaining, value);
+    recursiveSet(child, key.slice(1), value);
   } else {
     var obj = root[member];
     if (obj) {
@@ -72,6 +74,22 @@ function recursiveSet(root, key, value) {
     } else {
       root[member] = value;
     }
+  }
+}
+
+function recursiveDelete(root, key) {
+  var member = key[0];
+
+  if (key.length > 1) {
+    var child = root[member];
+    if (typeof child === 'object') {
+      recursiveDelete(child, key.slice(1));
+      if ($.isEmptyObject(child)) {
+        delete root[member];
+      }
+    }
+  } else {
+    delete root[member];
   }
 }
 
@@ -168,6 +186,8 @@ var SyncbaseWrapper = defineClass({
       return this.manageWrite(this.standardDelete(this.deleteFromSyncbase, k));
     },
 
+    // TODO(rosswang): transitional
+
     getData: function() {
       return this.data;
     },
@@ -260,7 +280,7 @@ var SyncbaseWrapper = defineClass({
                * Leave this handler attached but no-oping to drain the stream.
                */
             } else {
-              recursiveSet(newData, row[0], row[1]);
+              recursiveSet(newData, splitKey(row[0]), row[1]);
             }
           }).on('error', reject);
         }).catch(function(err) {
@@ -272,6 +292,8 @@ var SyncbaseWrapper = defineClass({
         });
       }
     },
+
+    // TODO(rosswang): end transitional
 
     syncgroup: function(sgAdmin, name) {
       var self = this;
@@ -384,10 +406,197 @@ var SyncbaseWrapper = defineClass({
       };
 
       return sgp;
-    }
+    },
+
+    /**
+     * @return {
+     *    data,
+     *    onChange*(key, ?value, continued),
+     *    onUpdate*(data),
+     *    onError*(err),
+     *    onClose*(?err)
+     *  }
+     */
+    getWatchedObject: function(prefix) {
+      var result = {
+        data: {}
+      };
+
+      var onChange = defineClass.event(result, 'onChange');
+      var onUpdate = defineClass.event(result, 'onUpdate');
+      var onError = defineClass.event(result, 'onError');
+      var onClose = defineClass.event(result, 'onClose', 'memory');
+
+      function put(k, v) {
+        recursiveSet(result.data, k, v);
+      }
+
+      return this.getRawWatched(prefix, {
+        onData: put
+      }, {
+        onPut: function(k, v, continued) {
+          put(k, v);
+          onChange(k, v, continued);
+        },
+        onDelete: function(k, continued) {
+          recursiveDelete(result.data, k);
+          onChange(k, null, continued);
+        },
+        onBatchEnd: function() {
+          onUpdate(result.data);
+        },
+        onError: onError,
+        onClose: onClose
+      }).then(function() {
+        return result;
+      });
+    },
+
+    /**
+     * Pulls data from Syncbase and registers watch handlers. Returns a promise
+     * resolving after the initial pull.
+     *
+     * @param pullHandler { onData(key, value), onError(err) }
+     * @param streamHandler {
+     *    ?onPut(key, value, continued),
+     *    ?onDelete(key, continued),
+     *    ?onBatchEnd(),
+     *    onError(err),
+     *    onClose(?err)
+     *  }; These are callbacks rather than events to guarantee that no updates
+     *  are missed. `continued` indicates whether a change is followed by more
+     *  changes in same batch.
+     * @return a promise resolving after the initial pull completes. Watch
+     *  callbacks may continue to be called until onClose.
+     */
+    getRawWatched: function(prefix, pullHandler, streamHandler) {
+      var self = this;
+
+      var resumeMarker;
+
+      var opts = new syncbase.nosql.BatchOptions();
+      return self.runInBatch(self.context, self.db, opts, function(db, cb) {
+          Promise.all([
+            self.pull2(db, prefix, pullHandler.onData, pullHandler.onError),
+            promisify(db.getResumeMarker.bind(db))(self.context)
+          ]).then(function(args) {
+            resumeMarker = args[1];
+            cb('abort');
+          }, cb);
+        }).catch(function(err) {
+          if (err !== 'abort') {
+            throw err;
+          }
+
+          var stream = self.db.watch(self.context, 't', joinKey(prefix),
+            resumeMarker, streamHandler.onClose);
+          stream.on('data', function(change) {
+            try {
+              switch(change.changeType) {
+              case 'put':
+                new Promise(function(resolve, reject) {
+                  if (streamHandler.onPut) {
+                    change.getValue(function(err, value) {
+                      if (err) {
+                        reject(err);
+                      } else {
+                        resolve(streamHandler.onPut(splitKey(change.rowName),
+                          value, change.continued));
+                      }
+                    });
+                  } else {
+                    resolve();
+                  }
+                }).then(function() {
+                  if (!change.continued && streamHandler.onBatchEnd) {
+                    return streamHandler.onBatchEnd();
+                  }
+                }).catch(streamHandler.onError);
+                break;
+              case 'delete':
+                new Promise(function(resolve, reject) {
+                  if (streamHandler.onDelete) {
+                    resolve(streamHandler.onDelete(splitKey(change.rowName),
+                      change.continued));
+                  } else {
+                    resolve();
+                  }
+                }).then(function() {
+                  if (!change.continued && streamHandler.onBatchEnd) {
+                    return streamHandler.onBatchEnd();
+                  }
+                }).catch(streamHandler.onError);
+                break;
+              default:
+                streamHandler.onError(
+                  new Error('Invalid change type ' + change.changeType));
+              }
+            } catch(err) {
+              streamHandler.onError(err);
+            }
+          }).on('error', streamHandler.onError);
+        });
+    },
   },
 
   privates: {
+    /**
+     * TODO(rosswang): transitional: pull2 => pull
+     *
+     * Handlers may continue to be called even after the promise has been
+     * rejected.
+     *
+     * @param onData handler callback that takes a key, value pair.
+     * @param onError handler callback that takes an error.
+     * @return a promise that resolves when the pull is complete or rejects if
+     *  the pull failed or either handler threw.
+     */
+    pull2: function(db, prefix, onData, onError) {
+      var self = this;
+
+      return new Promise(function(resolve, reject) {
+        var isHeader = true;
+
+        var query = 'select k, v from t';
+        if (prefix) {
+          query += ' where k like "' + joinKey(prefix) + '%"';
+        }
+
+        db.exec(self.context, query, function(err) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve();
+          }
+        }).on('data', function(row) {
+          if (isHeader) {
+            isHeader = false;
+            return;
+          }
+
+          try {
+            onData(splitKey(row[0]), row[1]);
+          } catch (err) {
+            reject(err);
+          }
+        }).on('error', function(err) {
+          if (!onError) {
+            reject(err);
+          } else {
+            try {
+              onError(err);
+            } catch (err2) {
+              reject(err2);
+            }
+          }
+        });
+      });
+    },
+
+    /* TODO(rosswang): Keep this around even though the dirty flag and write
+     * records are not used since watch integration, because there is still a
+     * potential race condition; I'm just not particularly sure how to deal with
+     * it yet. If it turns out we don't have to worry about it, delete this. */
     manageWrite: function(promise) {
       var writes = this.writes;
 
@@ -417,10 +626,12 @@ var SyncbaseWrapper = defineClass({
 
   constants: [ 'mountName' ],
 
+  // TODO(rosswang): transitional
   events: {
     onError: 'memory',
     onUpdate: '',
   },
+  // TODO(rosswang): end transitional
 
   init: function(context, db, mountName) {
     // TODO(rosswang): mountName probably won't be necessary after syncgroup
@@ -437,8 +648,7 @@ var SyncbaseWrapper = defineClass({
     this.putToSyncbase = promisify(this.t.put.bind(this.t));
     this.deleteFromSyncbase = promisify(this.t.deleteRange.bind(this.t));
 
-    // Start the watch loop to periodically poll for changes from sync.
-    // TODO(rosswang): Remove this once we have client watch.
+    // TODO(rosswang): transitional
     function watchLoop() {
       if (!self.pull.current) {
         self.refresh().catch(self.onError);
@@ -446,6 +656,7 @@ var SyncbaseWrapper = defineClass({
       setTimeout(watchLoop, 500);
     }
     process.nextTick(watchLoop);
+    // TODO(rosswang): end transitional
   }
 });
 

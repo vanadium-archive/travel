@@ -2,10 +2,26 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+require('es6-shim');
+
+var $ = require('../util/jquery');
 var defineClass = require('../util/define-class');
+var SyncbaseWrapper = require('../vanadium-wrapper/syncbase-wrapper');
+
+var defs = {};
+
+$.each(SyncbaseWrapper.ifc, function(method) {
+  defs[method] = function() {
+    var args = arguments;
+    return this.sbPromise.then(function(sb) {
+      return sb[method].apply(sb, args);
+    });
+  };
+});
 
 var DeferredSbWrapper = defineClass({
-  publics: {
+  // TODO(rosswang): extend = transitional
+  publics: $.extend(defs, {
     batch: function(fn) {
       this.manageWrite(this.sbPromise.then(function(syncbase) {
         return syncbase.batch(fn);
@@ -35,8 +51,9 @@ var DeferredSbWrapper = defineClass({
         return syncbase.pull(prefix);
       });
     }
-  },
+  }),
 
+  // TODO(rosswang): transitional
   privates: {
     manageWrite: function(promise) {
       var writes = this.writes;
@@ -63,17 +80,21 @@ var DeferredSbWrapper = defineClass({
     onError: 'memory',
     onUpdate: ''
   },
+  // TODO(rosswang): end transitional
 
   init: function(sbPromise) {
+    this.sbPromise = sbPromise;
+
+    // TODO(rosswang): transitional
     var self = this;
 
     this.writes = new Set();
-    this.sbPromise = sbPromise;
 
     sbPromise.then(function(syncbase) {
       syncbase.onError.add(self.onError);
       syncbase.onUpdate.add(self.processUpdates);
     }).catch(this.onError);
+    // TODO(rosswang): end transitional
   }
 });
 
