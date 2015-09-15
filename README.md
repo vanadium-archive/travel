@@ -12,12 +12,6 @@ If you have a `$V23_ROOT` setup you can install Node.js from
 Optionally, it is possible to use your own install of Node.js if you would like
 to use a more recent version.
 
-In order to run the local syncbase instance via `make bootstrap` or related
-targets, you will need to ensure that the standard Vanadium binaries have been
-built by running:
-
-    v23 go install v.io/...
-
 ## Building
 
 The default make task will install any modules listed in the `package.json` and
@@ -35,12 +29,11 @@ changes using the watch tool:
 Local instances require a blessed syncbase instance. To attain blessings and
 start syncbase, use:
 
-    make bootstrap [creds=<creds subdir>] [port=<syncbase port>]
+    make syncbase [creds=<creds subdir>] [port=<syncbase port>]
 
-Related targets:
+Related target:
 
     make creds [creds=<creds subdir>]
-    make syncbase [creds=<creds subdir>] [port=<syncbase port>]
 
 You can similarly run with fresh creds or syncbase data via:
 
@@ -53,4 +46,4 @@ To run a local dev server use:
 
 To connect to a syncbase instance other than the default, navigate to:
 
-    localhost:<server port>/?syncbase=<syncbase port>
+    localhost:<server port>/?syncbase=<syncbase name or port>

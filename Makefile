@@ -1,5 +1,5 @@
 PATH := node_modules/.bin:$(PATH)
-PATH := $(V23_ROOT)/third_party/cout/node/bin:$(V23_ROOT)/release/go/bin:$(PATH)
+PATH := $(V23_ROOT)/third_party/cout/node/bin:bin:$(PATH)
 
 .DEFAULT_GOAL := all
 
@@ -62,19 +62,24 @@ $(tests): test/%: test/%.js test/* mocks/* ifc/index.js node_modules $(js_files)
 start: all
 	@static server-root -p $(port)
 
-.PHONY: bootstrap
-bootstrap: creds syncbase
+bin/principal:
+	jiri go build -a -o $@ v.io/x/ref/cmd/principal
+
+bin/syncbased:
+	jiri go build -a -o $@ v.io/x/ref/services/syncbase/syncbased
 
 .PHONY: creds
-creds:
-	@principal seekblessings --v23.credentials tmp/creds/$(creds)
+creds: tmp/creds/$(creds)
+
+tmp/creds/$(creds): bin/principal
+	@principal seekblessings --v23.credentials $@
 
 .PHONY: syncbase
-syncbase:
+syncbase: bin/syncbased creds
 	@bash ./tools/start_services.sh
 
 .PHONY: clean-all
-clean-all: clean clean-tmp
+clean-all: clean clean-tmp clean-bin
 
 .PHONY: clean
 clean:
@@ -91,3 +96,7 @@ clean-syncbase:
 .PHONY: clean-creds
 clean-creds:
 	rm -rf tmp/creds
+
+.PHONY: clean-bin
+clean-bin:
+	rm -rf bin

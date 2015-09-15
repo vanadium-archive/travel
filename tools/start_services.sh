@@ -9,7 +9,7 @@
 #
 # Optionally, the creds variable can specify a subdirectory.
 
-PATH=${PATH}:${V23_ROOT}/release/go/bin
+PATH=${PATH}:bin
 
 set -euo pipefail
 
