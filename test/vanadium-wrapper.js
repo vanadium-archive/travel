@@ -32,7 +32,7 @@ function setUpCrashTest(t) {
       return context;
     },
     function(err) {
-      t.fail('init error');
+      t.fail('init error: ' + err);
     });
 
   mockVanadium.finishInit(null, mockRuntime);

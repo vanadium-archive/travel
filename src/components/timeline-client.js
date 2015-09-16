@@ -5,6 +5,7 @@
 var defineClass = require('../util/define-class');
 
 var ifcx = require('../ifc/conversions');
+var vdlTravel = require('../../ifc');
 
 var destDefs = {
   getPlace: function() {
@@ -57,17 +58,17 @@ var TimelineClient = defineClass({
     },
 
     add: function(i) {
-      return this.service.add(this.context, ifcx.box(i))
+      return this.service.add(this.context, ifcx.box(i, vdlTravel.Int16))
         .then(this.getDestination);
     },
 
     get: function(i) {
-      return this.service.get(this.context, ifcx.box(i))
+      return this.service.get(this.context, ifcx.box(i, vdlTravel.Int16))
         .then(this.getDestinationOrDestinations);
     },
 
     remove: function(i) {
-      return this.service.remove(this.context, ifcx.box(i))
+      return this.service.remove(this.context, ifcx.box(i, vdlTravel.Int16))
         .then(this.getDestination);
     },
 

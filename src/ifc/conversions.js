@@ -16,8 +16,8 @@ var PLACE_PHOTO_OPTS = {
 };
 
 var x = {
-  box: function(i) {
-    return i === undefined || i === null? i : new vdlTravel.Int16({ value: i });
+  box: function(i, BoxedType) {
+    return i === undefined || i === null? i : new BoxedType({ value: i });
   },
 
   unbox: function(ifc) {
@@ -37,8 +37,8 @@ var x = {
         getUrl: function() { return ifc.photoUrl; }
       }] : [],
       icon: ifc.iconUrl,
-      rating: ifc.rating,
-      priceLevel: ifc.priceLevel
+      rating: x.unbox(ifc.rating),
+      priceLevel: x.unbox(ifc.priceLevel)
     });
   },
 
@@ -56,11 +56,11 @@ var x = {
       formattedAddress: details && details['formatted_address'] ||
         placeObj.query,
       name: details && details.name,
-      photoUrl: details.photos[0]?
+      photoUrl: details.photos && details.photos[0]?
         details.photos[0].getUrl(PLACE_PHOTO_OPTS) : '',
       iconUrl: details.icon || '',
-      rating: details.rating,
-      priceLevel: details.priceLevel
+      rating: x.box(details.rating, vdlTravel.Float32),
+      priceLevel: x.box(details.priceLevel, vdlTravel.Byte)
     });
   },
 
