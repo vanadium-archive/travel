@@ -1,5 +1,5 @@
 PATH := node_modules/.bin:$(PATH)
-PATH := $(V23_ROOT)/third_party/cout/node/bin:bin:$(PATH)
+PATH := $(JIRI_ROOT)/third_party/cout/node/bin:bin:$(PATH)
 
 .DEFAULT_GOAL := all
 
@@ -33,8 +33,8 @@ node_modules: package.json
 	@npm prune
 	@npm install
 	@ # TODO(rosswang): remove these two
-	@npm install $(V23_ROOT)/release/javascript/core/
-	@npm install $(V23_ROOT)/release/javascript/syncbase/
+	@npm install $(JIRI_ROOT)/release/javascript/core/
+	@npm install $(JIRI_ROOT)/release/javascript/syncbase/
 	@touch $@ # if npm does nothing, we don't want to keep trying
 
 server-root:
