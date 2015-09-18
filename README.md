@@ -19,7 +19,7 @@ build a browser bundle from `src/index.js` via browserify.
 
     make
 
-It is possible to have the build happen automatically anytime a JavaScript file
+It is possible to have the build happen automatically any time a JavaScript file
 changes using the watch tool:
 
     watch make

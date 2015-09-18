@@ -28,10 +28,6 @@ var TripManager = defineClass({
       this.awaitedTripId = tripId;
     },
 
-    getMessageData: function() {
-      return this.activeTrip && this.activeTrip.messages;
-    },
-
     getDestinationData: function() {
       return this.activeTrip && this.activeTrip.destinations;
     },
@@ -78,7 +74,10 @@ var TripManager = defineClass({
      * pushing from local.
      */
     setUpstream: function() {
-      this.upstreamTripId = this.activeTripId;
+      if (this.upstreamTripId !== this.activeTripId) {
+        this.upstreamTripId = this.activeTripId;
+        this.onTripChange(this.upstreamTripId);
+      }
     },
 
     processTrips: function(userTripMetadata, trips) {
@@ -185,6 +184,13 @@ var TripManager = defineClass({
       return this.getTripLength(trip) <= 1;
     }
   },
+
+  events: [
+    /**
+     * @param tripId
+     */
+    'onTripChange'
+  ],
 
   init: function(usernamePromise, deferredSyncbaseWrapper,
       startSyncgroupManager) {

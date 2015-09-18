@@ -2,12 +2,18 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+require('es6-shim');
+
 var $ = require('../util/jquery');
 var defineClass = require('../util/define-class');
 
 var uuid = require('uuid');
 
 var marshalling = require('./marshalling');
+
+function cmp(a, b) {
+  return a.timestamp - b.timestamp;
+}
 
 var MessageSync = defineClass({
   publics: {
@@ -19,40 +25,60 @@ var MessageSync = defineClass({
       var value = marshalling.marshal(payload);
 
       this.sbw.put(this.tripManager.getMessagesKey(id), value);
-    },
-
-    processMessages: function(messageData) {
-      var self = this;
-
-      if (messageData) {
-        /* Dispatch new messages in time order, though don't put them before
-         * local messages. */
-        var newMessages = [];
-        $.each(messageData, function(id, serializedMessage) {
-          if (!self.messages[id]) {
-            var message = marshalling.unmarshal(serializedMessage);
-            newMessages.push(message);
-            self.messages[id] = message;
-          }
-        });
-        newMessages.sort(function(a, b) {
-          return a.timestamp < b.timestamp? -1 :
-                 a.timestamp > b.timestamp?  1 :
-                                             0;
-        });
-
-        this.onMessages(newMessages);
-      }
     }
   },
 
-  events: [ 'onMessages' ],
+  privates: {
+    processMessage: function(k, v) {
+      var id = k[k.length - 1];
+      if (!this.messageIds.has(id)) {
+        this.messageIds.add(id);
+        this.messageBatch.push(marshalling.unmarshal(v));
+      }
+    },
+
+    endBatch: function() {
+      this.messageBatch.sort(cmp);
+      this.onMessages(this.messageBatch);
+      this.messageBatch = [];
+    },
+
+    setPrefix: function(prefix) {
+      var self = this;
+
+      return this.sbw.getRawWatched(prefix, {
+        onData: this.processMessage,
+        onError: this.onError
+      }, {
+        onPut: this.processMessage,
+        onBatchEnd: this.endBatch,
+        onError: this.onError,
+        onClose: function(err) {
+          if (err) {
+            self.onError(err);
+          }
+        }
+      }).then(this.endBatch, this.onError);
+    },
+
+    refresh: function() {
+      return this.setPrefix(this.tripManager.getMessagesKey());
+    }
+  },
+
+  events: {
+    onMessages: '',
+    onError: 'memory'
+  },
 
   init: function(deferredSyncbaseWrapper, tripManager) {
     this.sbw = deferredSyncbaseWrapper;
     this.tripManager = tripManager;
 
-    this.messages = {};
+    this.messageIds = new Set();
+    this.messageBatch = [];
+
+    tripManager.onTripChange.add(this.refresh);
   }
 });
 

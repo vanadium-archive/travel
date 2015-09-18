@@ -98,7 +98,6 @@ var TravelSync = defineClass({
       this.tripManager.processTrips(data.user && data.user.tripMetadata,
         data.trips);
 
-      this.messageSync.processMessages(this.tripManager.getMessageData());
       this.destinationSync.processDestinations(
         this.tripManager.getDestinationData());
 
@@ -266,6 +265,7 @@ var TravelSync = defineClass({
       mapsDependencies, sbw, this.tripManager);
 
     this.messageSync.onMessages.add(this.onMessages);
+    this.messageSync.onError.add(this.onError);
 
     this.deviceSync = new DeviceSync(mapsDependencies.maps,
         prereqs.then(function(args) { return args.identity; }),
