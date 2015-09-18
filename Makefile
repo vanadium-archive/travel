@@ -5,11 +5,11 @@ PATH := node_modules/.bin:$(JIRI_ROOT)/third_party/cout/node/bin:bin:$(PATH)
 
 port ?= 1058
 
-js_files := $(shell find src -name "*.js")
-server_static := $(patsubst src/static/%,server-root/%,$(wildcard src/static/*))
-tests := $(patsubst %.js,%,$(shell find test -name "*.js"))
+js_files := $(shell find browser/src -name "*.js")
+server_static := $(patsubst browser/src/static/%,server-root/%,$(wildcard browser/src/static/*))
+js_tests := $(patsubst %.js,%,$(shell find browser/test -name "*.js"))
 
-out_dirs := ifc server-root node_modules
+out_dirs := browser/ifc server-root node_modules
 
 .DELETE_ON_ERROR:
 
@@ -24,10 +24,10 @@ static: $(server_static)
 js: server-root/bundle.js
 
 .PHONY: ifc
-ifc: ifc/index.js
+ifc: browser/ifc/index.js
 
-ifc/index.js: src/ifc/*
-	@VDLPATH=src vdl generate -lang=javascript -js-out-dir=. ifc
+browser/ifc/index.js: common/ifc/*
+	@VDLPATH=common vdl generate -lang=javascript -js-out-dir=browser ifc
 
 node_modules: package.json
 	@npm prune
@@ -40,22 +40,22 @@ node_modules: package.json
 server-root:
 	@mkdir server-root
 
-server-root/bundle.js: ifc/index.js node_modules $(js_files) | server-root
-	browserify --debug src/index.js 1> $@
+server-root/bundle.js: browser/ifc/index.js node_modules $(js_files) | server-root
+	browserify --debug browser/src/index.js 1> $@
 
-$(server_static): server-root/%: src/static/% | server-root
+$(server_static): server-root/%: browser/src/static/% | server-root
 	@cp $< $@
 	@echo "Copying static file $<"
 
 .PHONY: lint
 lint: node_modules
-	@jshint .
+	@jshint browser/{src,mocks,test}
 
 .PHONY: test
-test: lint $(tests)
+test: lint $(js_tests)
 
-.PHONY: $(tests)
-$(tests): test/%: test/%.js test/* mocks/* ifc/index.js node_modules $(js_files)
+.PHONY: $(js_tests)
+$(js_tests): browser/test/%: browser/test/%.js browser/test/* browser/mocks/* browser/ifc/index.js node_modules $(js_files)
 	@tape $<
 
 .PHONY: start
