@@ -276,7 +276,7 @@ var SyncbaseWrapper = defineClass({
     syncGroup: function(sgAdmin, name) {
       var self = this;
 
-      name = vanadium.naming.join(sgAdmin, '@@sync', name);
+      name = vanadium.naming.join(sgAdmin, '%%sync', name);
       var sg = this.db.syncGroup(name);
 
       //syncgroup-promisified
