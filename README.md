@@ -7,7 +7,7 @@ An example travel planner using Vanadium.
 If you have a `$JIRI_ROOT` setup you can install Node.js from
 `$JIRI_ROOT/third_party` by running:
 
-    v23 profile install nodejs
+    jiri profile install nodejs
 
 Optionally, it is possible to use your own install of Node.js if you would like
 to use a more recent version.
