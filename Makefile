@@ -1,5 +1,5 @@
-PATH := node_modules/.bin:$(PATH)
-PATH := $(JIRI_ROOT)/third_party/cout/node/bin:bin:$(PATH)
+SHELL := /bin/bash -euo pipefail
+PATH := node_modules/.bin:$(JIRI_ROOT)/third_party/cout/node/bin:bin:$(PATH)
 
 .DEFAULT_GOAL := all
 
