@@ -59,8 +59,8 @@ var TravelSync = defineClass({
       this.tripManager.watchForTrip(tripId);
     },
 
-    joinTripSyncGroup: function(owner, tripId) {
-      return this.tripManager.joinTripSyncGroup(owner, tripId);
+    joinTripSyncgroup: function(owner, tripId) {
+      return this.tripManager.joinTripSyncgroup(owner, tripId);
     },
 
     getRelatedDevices: function(direction) {
@@ -148,17 +148,17 @@ var TravelSync = defineClass({
       return gm;
     },
 
-    createPrimarySyncGroup: function(syncgroupManager) {
+    createPrimarySyncgroup: function(syncgroupManager) {
       var self = this;
 
-      this.status.userSyncGroup = 'creating';
-      return syncgroupManager.createSyncGroup('user', [[]],
+      this.status.userSyncgroup = 'creating';
+      return syncgroupManager.createSyncgroup('user', [[]],
         [syncgroupManager.identity.username])
         .then(function(sg) {
-          self.status.userSyncGroup = 'created';
+          self.status.userSyncgroup = 'created';
           return sg;
         }, function(err) {
-          self.status.userSyncGroup = 'failed';
+          self.status.userSyncgroup = 'failed';
           throw err;
         });
     },
@@ -249,8 +249,8 @@ var TravelSync = defineClass({
       .then(function(args) {
         return self.createSyncgroupManager(args[0], args[1]);
       });
-    var createPrimarySyncGroup = this.startSyncgroupManager
-      .then(this.createPrimarySyncGroup);
+    var createPrimarySyncgroup = this.startSyncgroupManager
+      .then(this.createPrimarySyncgroup);
 
     this.vanadiumWrapperPromise = prereqs.then(function(args) {
       return args.vanadiumWrapper;
@@ -277,7 +277,7 @@ var TravelSync = defineClass({
         startRpc,
         startSyncbase,
         this.startSyncgroupManager,
-        createPrimarySyncGroup
+        createPrimarySyncgroup
       ]).then(function(values) {
         return {
           server: values[0],

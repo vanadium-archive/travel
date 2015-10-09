@@ -22,8 +22,8 @@ var PLACES = mockMaps.places.corpus;
 var UI_SLA = 100;
 /**
  * Syncbase doesn't yet provide us any notification that the first sync after
- * joining the initial sync groups has happened. This SLA is currently based on
- * a similar timeout in the Travel app, though in the future if that logic gets
+ * joining the initial syncgroups has happened. This SLA is currently based on a
+ * similar timeout in the Travel app, though in the future if that logic gets
  * smarter we can shrink it to the sync SLA.
  *
  * Set to 2500 for real testing, 250 for watch.

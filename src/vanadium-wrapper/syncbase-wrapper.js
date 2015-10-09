@@ -75,7 +75,7 @@ function recursiveSet(root, key, value) {
   }
 }
 
-var SG_MEMBER_INFO = new syncbase.nosql.SyncGroupMemberInfo();
+var SG_MEMBER_INFO = new syncbase.nosql.SyncgroupMemberInfo();
 
 // TODO(rosswang): generalize this
 // If this is updated, the regex in escapeKeyElement needs updating too.
@@ -273,11 +273,11 @@ var SyncbaseWrapper = defineClass({
       }
     },
 
-    syncGroup: function(sgAdmin, name) {
+    syncgroup: function(sgAdmin, name) {
       var self = this;
 
       name = vanadium.naming.join(sgAdmin, '%%sync', name);
-      var sg = this.db.syncGroup(name);
+      var sg = this.db.syncgroup(name);
 
       //syncgroup-promisified
       var sgp;
@@ -321,7 +321,7 @@ var SyncbaseWrapper = defineClass({
        * args. */
       sgp = {
         buildSpec: function(prefixes, mountTables, admin, initialPermissions) {
-          return new syncbase.nosql.SyncGroupSpec({
+          return new syncbase.nosql.SyncgroupSpec({
             perms: new Map([
               ['Admin', {in: [admin]}],
               ['Read', {in: initialPermissions}],
@@ -330,7 +330,7 @@ var SyncbaseWrapper = defineClass({
               ['Debug', {in: [admin]}]
             ]),
             prefixes: prefixes.map(function(p) {
-              return new syncbase.nosql.SyncGroupPrefix({
+              return new syncbase.nosql.SyncgroupPrefix({
                 tableName: 't',
                 rowPrefix: joinKey(p)
               });
@@ -423,7 +423,7 @@ var SyncbaseWrapper = defineClass({
   },
 
   init: function(context, db, mountName) {
-    // TODO(rosswang): mountName probably won't be necessary after SyncGroup
+    // TODO(rosswang): mountName probably won't be necessary after syncgroup
     // admin instances are hosted (see group-manager).
     var self = this;
     this.context = context;

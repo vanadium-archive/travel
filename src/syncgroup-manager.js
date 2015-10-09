@@ -12,10 +12,10 @@ var naming = require('./naming');
 
 var SyncgroupManager = defineClass({
   publics: {
-    createSyncGroup: function(name, prefixes, initialCollaborators) {
+    createSyncgroup: function(name, prefixes, initialCollaborators) {
       var self = this;
 
-      var sg = this.syncbaseWrapper.syncGroup(self.sgAdmin, name);
+      var sg = this.syncbaseWrapper.syncgroup(self.sgAdmin, name);
 
       var mgmt = vanadium.naming.join(this.mountNames.app, 'sgmt');
       var spec = sg.buildSpec(prefixes, [mgmt], this.identity.account,
@@ -25,7 +25,7 @@ var SyncgroupManager = defineClass({
         }));
 
       return sg.joinOrCreate(spec).then(function() {
-        // TODO(rosswang): this is a hack to make the SyncGroup joinable
+        // TODO(rosswang): this is a hack to make the syncgroup joinable
         return self.vanadiumWrapper.setPermissions(mgmt, new Map([
           ['Admin', {in: ['...']}],
           ['Read', {in: ['...']}],
@@ -36,17 +36,17 @@ var SyncgroupManager = defineClass({
       });
     },
 
-    destroySyncGroup: function(name) {
-      return this.syncbaseWrapper.syncGroup(this.sgAdmin, name).destroy();
+    destroySyncgroup: function(name) {
+      return this.syncbaseWrapper.syncgroup(this.sgAdmin, name).destroy();
     },
 
-    joinSyncGroup: function(owner, name) {
-      return this.getForeignSyncGroup(owner, name).join();
+    joinSyncgroup: function(owner, name) {
+      return this.getForeignSyncgroup(owner, name).join();
     },
 
     addCollaborator: function(owner, sgName, username) {
       var blessing = Identity.blessingForUsername(username);
-      return this.getForeignSyncGroup(owner, sgName)
+      return this.getForeignSyncgroup(owner, sgName)
         .changeSpec(function(spec) {
           ['Read', 'Write', 'Resolve'].forEach(function(perm) {
             spec.perms.get(perm).in.push(blessing);
@@ -56,8 +56,8 @@ var SyncgroupManager = defineClass({
   },
 
   privates: {
-    getForeignSyncGroup: function(owner, name) {
-      return this.syncbaseWrapper.syncGroup(
+    getForeignSyncgroup: function(owner, name) {
+      return this.syncbaseWrapper.syncgroup(
         vanadium.naming.join(naming.appMount(owner), 'sgadmin'), name);
     },
 

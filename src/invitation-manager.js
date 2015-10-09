@@ -33,7 +33,7 @@ var InvitationManager = defineClass({
       return this.sgmPromise.then(function(sgm) {
         return Promise.all([
             self.addTripCollaborator(owner, tripId, recipient),
-            sgm.joinSyncGroup(recipient, 'invitations')
+            sgm.joinSyncgroup(recipient, 'invitations')
           ]).then(function() {
             return sgm.syncbaseWrapper.put(
               invitationKey(recipient, owner, tripId), self.username);
@@ -50,7 +50,7 @@ var InvitationManager = defineClass({
     invitation: defineClass.innerClass({
       publics: {
         accept: function() {
-          return this.outer.joinTripSyncGroup(this.owner, this.tripId)
+          return this.outer.joinTripSyncgroup(this.owner, this.tripId)
             .then(this.delete);
         },
 
@@ -85,16 +85,16 @@ var InvitationManager = defineClass({
       }
     }),
 
-    createTripSyncGroup: function(tripId, initialCollaborators) {
+    createTripSyncgroup: function(tripId, initialCollaborators) {
       return this.sgmPromise.then(function(sgm) {
-        return sgm.createSyncGroup(tripSgName(tripId), [['trips', tripId]],
+        return sgm.createSyncgroup(tripSgName(tripId), [['trips', tripId]],
           [sgm.identity.username].concat(initialCollaborators));
       });
     },
 
-    joinTripSyncGroup: function(owner, tripId) {
+    joinTripSyncgroup: function(owner, tripId) {
       return this.sgmPromise.then(function(sgm) {
-        return sgm.joinSyncGroup(owner, tripSgName(tripId));
+        return sgm.joinSyncgroup(owner, tripSgName(tripId));
       });
     },
 
@@ -106,7 +106,7 @@ var InvitationManager = defineClass({
           .catch(function(err) {
             if (err instanceof verror.NoExistError &&
                 owner === self.username) {
-              return self.createTripSyncGroup(tripId, collaborator);
+              return self.createTripSyncgroup(tripId, collaborator);
             } else {
               throw err;
             }
@@ -114,14 +114,14 @@ var InvitationManager = defineClass({
       });
     },
 
-    manageTripSyncGroups: function(trips) {
+    manageTripSyncgroups: function(trips) {
       var self = this;
 
       //TODO(rosswang): maybe make this more intelligent, and handle ejection
       if (trips) {
         $.each(trips, function(tripId, trip) {
           if (trip.owner) {
-            self.joinTripSyncGroup(trip.owner, tripId)
+            self.joinTripSyncgroup(trip.owner, tripId)
               .catch(function(err) {
                 if (!(err instanceof verror.NoExistError)) {
                   throw err;
@@ -135,7 +135,7 @@ var InvitationManager = defineClass({
     processUpdates: function(data) {
       var self = this;
 
-      this.manageTripSyncGroups(data.trips);
+      this.manageTripSyncgroups(data.trips);
 
       var toMe = data.invitations &&
         data.invitations[SyncbaseWrapper.escapeKeyElement(this.username)];
@@ -210,7 +210,7 @@ var InvitationManager = defineClass({
     this.invitations = {};
 
     sgmPromise.then(function(sgm) {
-      sgm.createSyncGroup('invitations',
+      sgm.createSyncgroup('invitations',
           [['invitations', SyncbaseWrapper.escapeKeyElement(self.username)]],
           ['...'])
         .catch(self.onError);

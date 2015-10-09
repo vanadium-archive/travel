@@ -153,7 +153,7 @@ var MockSyncbaseWrapper = defineClass({
   statics: {
     /**
      * SLA for a write to a mocked Syncbase instance to be reflected by synced
-     * instances. This is actually based on the size of the SyncGroups with the
+     * instances. This is actually based on the size of the syncgroups with the
      * current mock implementation--roughly n * SYNC_LOOP_SLA--but let's express
      * it as a constant for simplicity.
      */
@@ -185,7 +185,7 @@ var MockSyncbaseWrapper = defineClass({
       return extractData(this.repo) || {};
     },
 
-    syncGroup: function(sgAdmin, name) {
+    syncgroup: function(sgAdmin, name) {
       var repo = this.repo;
       var sgp;
 
@@ -198,7 +198,7 @@ var MockSyncbaseWrapper = defineClass({
       }
 
       function errNoExist() {
-        return new verror.NoExistError(null, 'SyncGroup does not exist.');
+        return new verror.NoExistError(null, 'Syncgroup does not exist.');
       }
 
       function getSg() {
