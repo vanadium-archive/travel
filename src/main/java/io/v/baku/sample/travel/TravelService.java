@@ -21,6 +21,7 @@ import io.v.v23.security.BlessingPattern;
 import io.v.v23.security.Blessings;
 import io.v.v23.security.VCertificate;
 import io.v.v23.security.VPrincipal;
+import io.v.v23.security.VSecurity;
 import io.v.v23.verror.VException;
 import io.v.v23.vom.VomUtil;
 
@@ -91,7 +92,7 @@ public class TravelService extends Service {
         principal.blessingStore().set(blessings, new BlessingPattern("..."));
 
         // Trust these blessings and all the "parent" blessings.
-        principal.addToRoots(blessings);
+        VSecurity.addToRoots(principal, blessings);
 
         // Our security environment is now set-up. Let's find a home in the
         // namespace for our service.
