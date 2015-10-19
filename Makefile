@@ -32,9 +32,12 @@ browser/ifc/index.js: common/ifc/*
 node_modules: package.json
 	@npm prune
 	@npm install
-	@ # TODO(rosswang): remove these two
-	@npm install $(JIRI_ROOT)/release/javascript/core/
-	@npm install $(JIRI_ROOT)/release/javascript/syncbase/
+	# Link Vanadium and Syncbase from JIRI_ROOT.
+	@rm -rf ./node_modules/{vanadium,syncbase}
+	@cd "$(JIRI_ROOT)/release/javascript/core" && npm link
+	@npm link vanadium
+	@cd "$(JIRI_ROOT)/release/javascript/syncbase" && make node_modules && npm link
+	@npm link syncbase
 	@touch $@ # if npm does nothing, we don't want to keep trying
 
 server-root:
