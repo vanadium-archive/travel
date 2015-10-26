@@ -365,7 +365,7 @@ var MockSyncbaseWrapper = defineClass({
   // TODO(rosswang): transitional
   events: {
     onError: 'memory',
-    onUpdate: 'memory'
+    onUpdate: ''
   },
   // TODO(rosswang): end transitional
 
