@@ -352,9 +352,9 @@ var SyncbaseWrapper = defineClass({
               ['Debug', {in: [admin]}]
             ]),
             prefixes: prefixes.map(function(p) {
-              return new syncbase.nosql.SyncgroupPrefix({
+              return new syncbase.nosql.TableRow({
                 tableName: 't',
-                rowPrefix: joinKey(p)
+                row: joinKey(p)
               });
             }),
             mountTables: mountTables
